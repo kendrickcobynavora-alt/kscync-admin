@@ -1,4 +1,4 @@
- import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard,
   UserPlus,
@@ -32,13 +32,13 @@ import {
 } from 'lucide-react';
 
 export default function App() {
-  // Authentication State
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     return localStorage.getItem('ksc_admin_auth') === 'true';
   });
-  const [loginUsername, setLoginUsername] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
+  const [loginUsername, setLoginUsername] = useState('admin@kscync.local');
+  const [loginPassword, setLoginPassword] = useState('kscync123');
   const [loginError, setLoginError] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [dashboardData, setDashboardData] = useState(null);
@@ -46,7 +46,7 @@ export default function App() {
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState({ message: '', type: 'success' });
 
-  // Customer Intake Form State (12kg Batch Split Rule & Physical Container Color)
+  // Customer Intake Form State
   const [selectedUserId, setSelectedUserId] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
@@ -56,7 +56,7 @@ export default function App() {
   const [paymentMethod, setPaymentMethod] = useState('Unpaid');
   const [targetTime, setTargetTime] = useState('Same Day, 6:00 PM - 8:00 PM');
 
-  // Weigh-in Modal State for Mobile Scheduled Orders ("Weight TBD at shop")
+  // Weigh-in Modal State
   const [weighOrder, setWeighOrder] = useState(null);
   const [weighInput, setWeighInput] = useState('8');
   const [weighColor, setWeighColor] = useState('Blue Bag');
@@ -65,7 +65,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [verifiedOrder, setVerifiedOrder] = useState(null);
 
-  // Interactive Utility Calculator State (Chapter 3 Baseline: ₱13.50/kg)
+  // Utility Calculator State
   const [waterCost, setWaterCost] = useState(5500);
   const [electricityCost, setElectricityCost] = useState(20000);
   const [suppliesCost, setSuppliesCost] = useState(15000);
@@ -116,38 +116,71 @@ export default function App() {
     }
   }, [isAuthenticated]);
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     setLoginError('');
-    // Credentials verification (Admin / staff access)
-    if (
-      (loginUsername.trim().toLowerCase() === 'admin' ||
-        loginUsername.trim().toLowerCase() === 'staff' ||
-        loginUsername.trim().toLowerCase() === 'kendrick') &&
-      loginPassword.trim() === 'kscync123'
-    ) {
-      setIsAuthenticated(true);
-      localStorage.setItem('ksc_admin_auth', 'true');
-      showToast('Welcome to KSCync Web Admin Portal');
-    } else {
-      setLoginError('Invalid username or password. (Hint: admin / kscync123)');
+    setLoginLoading(true);
+
+    try {
+      const res = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: loginUsername.trim(),
+          password: loginPassword.trim()
+        })
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok) {
+        setIsAuthenticated(true);
+        localStorage.setItem('ksc_admin_auth', 'true');
+        showToast('Successfully signed in to KSCync Admin Hub');
+      } else {
+        // Fallback check for local default admin credentials if backend user record is missing
+        if (
+          (loginUsername.trim().toLowerCase() === 'admin@kscync.local' ||
+            loginUsername.trim().toLowerCase() === 'admin') &&
+          loginPassword.trim() === 'kscync123'
+        ) {
+          setIsAuthenticated(true);
+          localStorage.setItem('ksc_admin_auth', 'true');
+          showToast('Successfully signed in');
+        } else {
+          setLoginError(data.error || data.message || 'Invalid username or password.');
+        }
+      }
+    } catch (err) {
+      // Offline / Render cold start fallback for default admin
+      if (
+        (loginUsername.trim().toLowerCase() === 'admin@kscync.local' ||
+          loginUsername.trim().toLowerCase() === 'admin') &&
+        loginPassword.trim() === 'kscync123'
+      ) {
+        setIsAuthenticated(true);
+        localStorage.setItem('ksc_admin_auth', 'true');
+        showToast('Successfully signed in');
+      } else {
+        setLoginError('Unable to connect to authentication server. Check your backend connection.');
+      }
+    } finally {
+      setLoginLoading(false);
     }
   };
 
   const handleLogout = () => {
     setIsAuthenticated(false);
     localStorage.removeItem('ksc_admin_auth');
-    showToast('Logged out successfully.');
+    showToast('Signed out successfully.');
   };
 
-  // 12kg Maximum Batch Rule Calculator (Matches Mobile App Batch 1 / Batch 2 Physical Identification)
   const parsedWeight = parseFloat(weightKg) || 0;
   const maxBatchLimit = 12;
   const batch1Weight = Math.min(parsedWeight, maxBatchLimit);
   const batch2Weight =
     parsedWeight > maxBatchLimit ? Number((parsedWeight - maxBatchLimit).toFixed(2)) : 0;
 
-  // Aligned Status Workflow matching Mobile App TrackScreen.js & Neon DB
   const workflowStages = [
     'Scheduled',
     'Received at Shop',
@@ -190,14 +223,13 @@ export default function App() {
         body: JSON.stringify({ status: nextStatus })
       });
       if (res.ok) {
-        showToast(`Order #${orderId} updated to "${nextStatus}" (Synced to Mobile App)`);
+        showToast(`Order #${orderId} updated to "${nextStatus}"`);
         fetchDashboard();
       } else {
-        const errData = await res.json().catch(() => ({}));
-        showToast(errData.error || 'Failed to advance order stage.', 'error');
+        showToast('Failed to advance order stage.', 'error');
       }
     } catch (err) {
-      showToast('Network error connecting to Render backend.', 'error');
+      showToast('Network error connecting to backend.', 'error');
     }
   };
 
@@ -216,13 +248,13 @@ export default function App() {
         });
       }
       if (res.ok) {
-        showToast(`Order #${orderId} payment marked as ${nextPaymentStatus}`);
+        showToast(`Order #${orderId} marked as ${nextPaymentStatus}`);
         fetchDashboard();
       } else {
-        showToast('Could not update payment status on server.', 'error');
+        showToast('Could not update payment status.', 'error');
       }
     } catch (err) {
-      showToast('Network error updating payment status.', 'error');
+      showToast('Network error updating payment.', 'error');
     }
   };
 
@@ -265,12 +297,11 @@ export default function App() {
         });
       }
       if (res.ok) {
-        showToast(`Order #${weighOrder.order_id} weighed (${w} kg) & assigned to ${weighColor}`);
+        showToast(`Order #${weighOrder.order_id} weighed (${w} kg) & tagged.`);
         setWeighOrder(null);
         fetchDashboard();
       } else {
-        const errData = await res.json().catch(() => ({}));
-        showToast(errData.error || 'Failed to save weigh-in.', 'error');
+        showToast('Failed to save weigh-in.', 'error');
       }
     } catch (err) {
       showToast('Network error saving weigh-in.', 'error');
@@ -282,7 +313,7 @@ export default function App() {
   const handleCreateOrder = async (e) => {
     e.preventDefault();
     if (!customerName.trim()) {
-      showToast('Please enter the customer name.', 'error');
+      showToast('Please enter customer name.', 'error');
       return;
     }
     setSubmitting(true);
@@ -357,8 +388,8 @@ export default function App() {
       if (res.ok) {
         showToast(
           batch2Weight > 0
-            ? `Order logged! Split into Batch 1 (${batch1Weight}kg) & Batch 2 (${batch2Weight}kg).`
-            : `Order logged under ${containerColor} (${batch1Weight}kg) and synced to Mobile App!`
+            ? `Order logged & split into Batch 1 (${batch1Weight}kg) & Batch 2 (${batch2Weight}kg).`
+            : `Order successfully logged under ${containerColor} (${batch1Weight}kg).`
         );
         setSelectedUserId('');
         setCustomerName('');
@@ -369,7 +400,7 @@ export default function App() {
         showToast(data.error || data.message || 'Server error logging order.', 'error');
       }
     } catch (err) {
-      showToast('Connection error: Render backend may be waking up. Try again.', 'error');
+      showToast('Connection error connecting to backend.', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -378,7 +409,7 @@ export default function App() {
   const handlePostAnnouncement = async (e) => {
     e.preventDefault();
     if (!announcementTitle.trim() || !announcementMessage.trim()) {
-      showToast('Please enter both title and message.', 'error');
+      showToast('Please enter title and message.', 'error');
       return;
     }
     setSubmitting(true);
@@ -395,15 +426,13 @@ export default function App() {
         })
       });
 
-      const data = await res.json().catch(() => ({}));
-
       if (res.ok) {
-        showToast('Announcement published live to Customer Mobile App!');
+        showToast('Announcement published successfully.');
         setAnnouncementTitle('');
         setAnnouncementMessage('');
         await fetchDashboard();
       } else {
-        showToast(data.error || data.message || 'Failed to publish announcement.', 'error');
+        showToast('Failed to publish announcement.', 'error');
       }
     } catch (err) {
       showToast('Network error publishing announcement.', 'error');
@@ -418,7 +447,7 @@ export default function App() {
         method: 'DELETE'
       });
       if (res.ok) {
-        showToast('Announcement removed from Mobile App');
+        showToast('Announcement removed.');
         fetchDashboard();
       } else {
         showToast('Unable to delete announcement.', 'error');
@@ -428,82 +457,88 @@ export default function App() {
     }
   };
 
-  // If not authenticated, render the secure Login Screen
+  // PROFESSIONAL LOGIN SCREEN
   if (!isAuthenticated) {
     return (
-      <div className="flex items-center justify-center h-screen bg-[#0f4b81] font-sans">
-        <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full space-y-6 mx-4">
-          <div className="text-center space-y-2">
-            <div className="inline-flex bg-[#0f4b81]/10 p-3.5 rounded-2xl">
-              <Shirt className="text-[#0f4b81] w-8 h-8" />
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-100">
+          <div className="bg-gradient-to-br from-[#0f4b81] to-blue-900 p-8 text-white text-center space-y-3">
+            <div className="inline-flex bg-white/10 p-3.5 rounded-2xl backdrop-blur-sm border border-white/15 shadow-inner">
+              <Shirt className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-2xl font-black text-gray-900 tracking-tight">KSCync Admin Portal</h1>
-            <p className="text-xs text-gray-500">
-              KSC Laundry Shop • Real-Time Management &amp; Mobile App Sync
-            </p>
-          </div>
-
-          {loginError && (
-            <div className="p-3.5 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-bold flex items-center space-x-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{loginError}</span>
-            </div>
-          )}
-
-          <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">
-                Username / Role
-              </label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
-                  <User className="w-4 h-4" />
-                </span>
-                <input
-                  type="text"
-                  required
-                  value={loginUsername}
-                  onChange={(e) => setLoginUsername(e.target.value)}
-                  placeholder="admin or staff"
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 text-xs text-gray-900 focus:outline-none focus:border-[#0f4b81]"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">
-                Password
-              </label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
-                  <Lock className="w-4 h-4" />
-                </span>
-                <input
-                  type="password"
-                  required
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 text-xs text-gray-900 focus:outline-none focus:border-[#0f4b81]"
-                />
-              </div>
-            </div>
-
-            <div className="pt-2">
-              <button
-                type="submit"
-                className="w-full py-3.5 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition shadow-md"
-              >
-                Sign In to Admin Hub
-              </button>
-            </div>
-
-            <div className="text-center pt-2">
-              <p className="text-[11px] text-gray-400">
-                Default credentials: <span className="font-bold text-gray-600">admin</span> / <span className="font-bold text-gray-600">kscync123</span>
+              <h1 className="text-xl font-extrabold tracking-tight">KSCync Admin Portal</h1>
+              <p className="text-xs text-blue-100 mt-1 font-medium">
+                KSC Laundry Shop Management System
               </p>
             </div>
-          </form>
+          </div>
+
+          <div className="p-8 space-y-6">
+            {loginError && (
+              <div className="p-3.5 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-semibold flex items-center space-x-2.5">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+                <span>{loginError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Admin Email / Username
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <User className="w-4 h-4" />
+                  </span>
+                  <input
+                    type="text"
+                    required
+                    value={loginUsername}
+                    onChange={(e) => setLoginUsername(e.target.value)}
+                    placeholder="admin@kscync.local"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81] focus:ring-2 focus:ring-[#0f4b81]/10 transition"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Password
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <Lock className="w-4 h-4" />
+                  </span>
+                  <input
+                    type="password"
+                    required
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81] focus:ring-2 focus:ring-[#0f4b81]/10 transition"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={loginLoading}
+                  className="w-full py-3.5 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition shadow-lg shadow-blue-900/10 flex items-center justify-center space-x-2 disabled:opacity-70"
+                >
+                  {loginLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                  <span>{loginLoading ? 'Authenticating...' : 'Sign In to Admin Hub'}</span>
+                </button>
+              </div>
+
+              <div className="text-center pt-2 border-t border-slate-100">
+                <p className="text-[11px] text-slate-400 font-medium">
+                  Default Admin: <span className="font-bold text-slate-600">admin@kscync.local</span> / <span className="font-bold text-slate-600">kscync123</span>
+                </p>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
     );
@@ -553,12 +588,12 @@ export default function App() {
     const display = status === 'Received' ? 'Scheduled' : status;
     const lower = (display || '').toLowerCase();
     if (lower === 'picked up' || lower === 'completed') {
-      return 'bg-green-100 text-green-700';
+      return 'bg-emerald-50 text-emerald-700 border border-emerald-200/60';
     }
     if (lower === 'ready for pick-up') {
-      return 'bg-amber-100 text-amber-800';
+      return 'bg-amber-50 text-amber-800 border border-amber-200/60';
     }
-    return 'bg-blue-50 text-[#0f4b81]';
+    return 'bg-blue-50 text-[#0f4b81] border border-blue-200/60';
   };
 
   const navItems = [
@@ -568,28 +603,26 @@ export default function App() {
     { id: 'pickup', label: 'Pickup Verification', icon: CheckSquare },
     { id: 'sales', label: 'Sales Analytics', icon: BarChart3 },
     { id: 'utility', label: 'Utility Analytics', icon: Calculator },
-    { id: 'settings', label: 'Settings (RBAC)', icon: Settings },
+    { id: 'settings', label: 'Settings & RBAC', icon: Settings },
     { id: 'profile', label: 'Admin Profile', icon: UserCircle }
   ];
 
   return (
-    <div className="flex h-screen bg-[#f8f9fa] font-sans text-gray-900 overflow-hidden">
+    <div className="flex h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden">
       {/* SIDEBAR NAVIGATION */}
-      <aside className="w-64 bg-[#0f4b81] text-white flex flex-col justify-between shadow-lg shrink-0">
+      <aside className="w-64 bg-[#0f4b81] text-white flex flex-col justify-between shadow-xl shrink-0">
         <div>
-          <div className="p-5 border-b border-white/10 flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="bg-white/15 p-2.5 rounded-xl">
-                <Shirt className="text-white w-6 h-6" />
-              </div>
-              <div>
-                <h1 className="font-black text-base tracking-wide text-white">KSCync</h1>
-                <p className="text-[11px] text-blue-200">Web Admin &amp; Staff Hub</p>
-              </div>
+          <div className="p-5 border-b border-white/10 flex items-center space-x-3">
+            <div className="bg-white/10 p-2.5 rounded-xl border border-white/10">
+              <Shirt className="text-white w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="font-extrabold text-sm tracking-tight text-white">KSCync</h1>
+              <p className="text-[11px] text-blue-200 font-medium">Web Admin &amp; Staff Hub</p>
             </div>
           </div>
 
-          <nav className="p-4 space-y-1">
+          <nav className="p-3.5 space-y-1">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
@@ -597,9 +630,9 @@ export default function App() {
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
-                  className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-xl text-xs font-bold transition ${
+                  className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition ${
                     isActive
-                      ? 'bg-white text-[#0f4b81] shadow-md'
+                      ? 'bg-white text-[#0f4b81] shadow-md shadow-black/5'
                       : 'text-blue-100 hover:bg-white/10'
                   }`}
                 >
@@ -611,13 +644,13 @@ export default function App() {
           </nav>
         </div>
 
-        {/* Sidebar Footer with Profile & Logout */}
-        <div className="p-4 border-t border-white/10 bg-black/15 space-y-2">
+        {/* Sidebar Footer */}
+        <div className="p-4 border-t border-white/10 bg-black/10 space-y-2">
           <button
             onClick={() => setActiveTab('profile')}
-            className="flex items-center space-x-3 text-left w-full hover:opacity-80 transition"
+            className="flex items-center space-x-3 text-left w-full hover:opacity-90 transition p-1 rounded-lg"
           >
-            <div className="w-9 h-9 rounded-full bg-white text-[#0f4b81] font-black flex items-center justify-center text-xs shrink-0">
+            <div className="w-8 h-8 rounded-full bg-white text-[#0f4b81] font-extrabold flex items-center justify-center text-xs shrink-0 shadow-sm">
               {adminProfile.fullName
                 .split(' ')
                 .map((n) => n[0])
@@ -627,12 +660,12 @@ export default function App() {
             </div>
             <div className="overflow-hidden flex-1">
               <p className="text-xs font-bold truncate text-white">{adminProfile.fullName}</p>
-              <p className="text-[10px] text-blue-200 truncate">{adminProfile.shopName}</p>
+              <p className="text-[10px] text-blue-200 truncate font-medium">{adminProfile.shopName}</p>
             </div>
           </button>
           <button
             onClick={handleLogout}
-            className="w-full py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-200 rounded-lg text-[11px] font-bold flex items-center justify-center space-x-1.5 transition"
+            className="w-full py-2 bg-red-500/20 hover:bg-red-500/30 text-red-100 rounded-xl text-[11px] font-bold flex items-center justify-center space-x-1.5 transition border border-red-500/20"
           >
             <LogOut className="w-3.5 h-3.5" />
             <span>Sign Out</span>
@@ -643,9 +676,9 @@ export default function App() {
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 flex flex-col overflow-y-auto relative">
         {/* TOP HEADER */}
-        <header className="bg-white border-b border-gray-100 px-8 py-4 flex justify-between items-center shadow-sm sticky top-0 z-20">
+        <header className="bg-white border-b border-slate-200/80 px-8 py-4 flex justify-between items-center shadow-xs sticky top-0 z-20">
           <div>
-            <h2 className="text-base font-bold text-gray-900">
+            <h2 className="text-sm font-extrabold text-slate-900 tracking-tight">
               {activeTab === 'dashboard' && 'Admin Dashboard'}
               {activeTab === 'intake' && 'Customer Intake & Container Logger (12kg Rule)'}
               {activeTab === 'progress' && 'Queue Workflow & Progress Manager'}
@@ -656,78 +689,75 @@ export default function App() {
               {activeTab === 'settings' && 'System Settings, Announcements & RBAC'}
               {activeTab === 'profile' && 'Admin Profile & Shop Directory'}
             </h2>
-            <p className="text-[11px] text-gray-500">
+            <p className="text-[11px] text-slate-500 font-medium">
               {adminProfile.shopName} • Real-Time Sync with KSCync Mobile App
             </p>
           </div>
 
           <div className="flex items-center space-x-3">
             <div
-              className={`px-3.5 py-1.5 rounded-full flex items-center space-x-2 border ${
+              className={`px-3.5 py-1.5 rounded-full flex items-center space-x-2 border text-xs font-bold ${
                 isTight
-                  ? 'bg-red-50 border-red-200 text-red-700'
-                  : 'bg-green-50 border-green-200 text-green-700'
+                  ? 'bg-rose-50 border-rose-200 text-rose-700'
+                  : 'bg-emerald-50 border-emerald-200 text-emerald-700'
               }`}
             >
               <span
                 className={`w-2 h-2 rounded-full ${
-                  isTight ? 'bg-red-500 animate-pulse' : 'bg-green-500'
+                  isTight ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'
                 }`}
               />
-              <span className="text-xs font-bold">
-                Shop Status: {isTight ? 'TIGHT' : 'LOOSE'}
-              </span>
+              <span>Shop Status: {isTight ? 'TIGHT' : 'LOOSE'}</span>
             </div>
             <button
               onClick={fetchDashboard}
               title="Sync with Cloud DB"
-              className="p-2 rounded-xl bg-gray-50 border border-gray-200 hover:bg-gray-100 text-gray-600 transition"
+              className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-600 transition shadow-2xs"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </header>
 
-        {/* GLOBAL LIVE SYNC TOAST */}
+        {/* TOAST NOTIFICATION */}
         {toast.message && (
           <div
             className={`mx-8 mt-4 px-4 py-3 rounded-xl shadow-md flex items-center justify-between text-xs font-bold ${
               toast.type === 'error'
-                ? 'bg-red-600 text-white'
-                : 'bg-[#0f4b81] text-white'
+                ? 'bg-rose-600 text-white'
+                : 'bg-slate-900 text-white'
             }`}
           >
             <div className="flex items-center space-x-2">
               {toast.type === 'error' ? (
-                <AlertCircle className="w-4 h-4 text-red-200 shrink-0" />
+                <AlertCircle className="w-4 h-4 text-rose-200 shrink-0" />
               ) : (
-                <CheckCircle2 className="w-4 h-4 text-green-300 shrink-0" />
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
               )}
               <span>{toast.message}</span>
             </div>
             <button
               onClick={() => setToast({ message: '', type: 'success' })}
-              className="text-white/80 hover:text-white ml-4"
+              className="text-white/80 hover:text-white ml-4 text-[11px] underline"
             >
               Dismiss
             </button>
           </div>
         )}
 
-        {/* WEIGH-IN MODAL FOR MOBILE SCHEDULED ORDERS */}
+        {/* WEIGH-IN MODAL */}
         {weighOrder && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl border border-gray-100 space-y-4">
-              <h3 className="text-base font-bold text-gray-900">
-                Weigh &amp; Tag Mobile Order #{weighOrder.order_id}
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-slate-100 space-y-4">
+              <h3 className="text-sm font-extrabold text-slate-900">
+                Weigh &amp; Tag Order #{weighOrder.order_id}
               </h3>
-              <p className="text-xs text-gray-500">
-                Customer:{' '}
-                <span className="font-bold text-gray-800">{weighOrder.customer_name}</span>. Enter actual shop scale weight and physical container color.
+              <p className="text-xs text-slate-500">
+                Customer: <span className="font-bold text-slate-800">{weighOrder.customer_name}</span>. Enter actual scale weight and container color.
               </p>
-              <form onSubmit={handleSaveWeighIn} className="space-y-3">
+              <form onSubmit={handleSaveWeighIn} className="space-y-3.5">
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                     Actual Weight (kg)
                   </label>
                   <input
@@ -737,17 +767,17 @@ export default function App() {
                     required
                     value={weighInput}
                     onChange={(e) => setWeighInput(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-900"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                     Physical Container Color
                   </label>
                   <select
                     value={weighColor}
                     onChange={(e) => setWeighColor(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-900"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
                   >
                     <option value="Blue Bag">Blue Bag</option>
                     <option value="Red Bag">Red Bag</option>
@@ -756,21 +786,21 @@ export default function App() {
                     <option value="White Laundry Hamper">White Laundry Hamper</option>
                   </select>
                 </div>
-                <div className="flex space-x-2 pt-2">
+                <div className="flex space-x-2.5 pt-2">
                   <button
                     type="button"
                     onClick={() => setWeighOrder(null)}
-                    className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-bold text-xs"
+                    className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold text-xs hover:bg-slate-200 transition"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="flex-1 py-2.5 bg-[#0f4b81] text-white rounded-xl font-bold text-xs flex items-center justify-center space-x-1"
+                    className="flex-1 py-3 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition flex items-center justify-center space-x-1.5 shadow-sm"
                   >
                     {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                    <span>Save &amp; Receive at Shop</span>
+                    <span>Save &amp; Receive</span>
                   </button>
                 </div>
               </form>
@@ -782,69 +812,53 @@ export default function App() {
         {activeTab === 'dashboard' && (
           <div className="p-8 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-              <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                <p className="text-xs text-gray-500 font-semibold mb-1">Total Orders Logged</p>
+              <div className="bg-white p-6 rounded-2xl shadow-xs border border-slate-200/80">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Total Orders</p>
                 <div className="flex items-baseline space-x-2">
-                  <h3 className="text-2xl font-black text-gray-900">{orders.length}</h3>
-                  <span className="text-xs font-bold text-green-600">
-                    ({activeOrders.length} active)
-                  </span>
+                  <h3 className="text-2xl font-black text-slate-900">{orders.length}</h3>
+                  <span className="text-xs font-bold text-emerald-600">({activeOrders.length} active)</span>
                 </div>
-                <p className="text-[10px] text-gray-400 mt-1">Synced with mobile app</p>
+                <p className="text-[11px] text-slate-500 mt-1 font-medium">Synced with mobile app</p>
               </div>
 
-              <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                <p className="text-xs text-gray-500 font-semibold mb-1">Active Machines</p>
+              <div className="bg-white p-6 rounded-2xl shadow-xs border border-slate-200/80">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Active Machines</p>
                 <div className="flex items-baseline space-x-2">
                   <h3 className="text-2xl font-black text-[#0f4b81]">
                     {activeMachinesCount} / {shopCapacityLimit}
                   </h3>
-                  <span className="text-xs font-bold text-blue-600">
-                    {Math.round(capacityPercent)}%
-                  </span>
+                  <span className="text-xs font-bold text-blue-600">{Math.round(capacityPercent)}%</span>
                 </div>
-                <p className="text-[10px] text-gray-400 mt-1">Mirrors mobile capacity bar</p>
+                <p className="text-[11px] text-slate-500 mt-1 font-medium">Mirrors mobile capacity bar</p>
               </div>
 
-              <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                <p className="text-xs text-gray-500 font-semibold mb-1">Estimated Queue Sales</p>
+              <div className="bg-white p-6 rounded-2xl shadow-xs border border-slate-200/80">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Estimated Sales</p>
                 <div className="flex items-baseline space-x-2">
-                  <h3 className="text-2xl font-black text-gray-900">
-                    ₱{estimatedLiveSales.toLocaleString()}
-                  </h3>
-                  <span className="text-xs font-bold text-green-600">Live</span>
+                  <h3 className="text-2xl font-black text-slate-900">₱{estimatedLiveSales.toLocaleString()}</h3>
+                  <span className="text-xs font-bold text-emerald-600">Live</span>
                 </div>
-                <p className="text-[10px] text-gray-400 mt-1">Based on ₱140/batch rate</p>
+                <p className="text-[11px] text-slate-500 mt-1 font-medium">Based on ₱140/batch rate</p>
               </div>
 
-              <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                <p className="text-xs text-gray-500 font-semibold mb-1">Avg Turnaround</p>
-                <h3 className="text-2xl font-black text-gray-900">2h 15m</h3>
-                <p className="text-[10px] text-gray-400 mt-1">Drop-off to ready pickup</p>
+              <div className="bg-white p-6 rounded-2xl shadow-xs border border-slate-200/80">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Avg Turnaround</p>
+                <h3 className="text-2xl font-black text-slate-900">2h 15m</h3>
+                <p className="text-[11px] text-slate-500 mt-1 font-medium">Drop-off to ready pickup</p>
               </div>
             </div>
 
             {/* Active Shop Workload Banner */}
-            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-wrap justify-between items-center gap-4">
-              <div className="flex items-center space-x-3">
-                <div
-                  className={`p-3 rounded-xl ${
-                    isTight ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-                  }`}
-                >
+            <div className="bg-white p-6 rounded-2xl shadow-xs border border-slate-200/80 flex flex-wrap justify-between items-center gap-4">
+              <div className="flex items-center space-x-3.5">
+                <div className={`p-3 rounded-xl ${isTight ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
                   <Clock className="w-5 h-5" />
                 </div>
                 <div>
-                  <p className="text-[11px] text-gray-500 font-semibold">
-                    Active Shop Workload State
-                  </p>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Shop Capacity State</p>
                   <div className="flex items-center space-x-2 mt-0.5">
-                    <span className="text-sm font-black text-gray-900">Shop Status:</span>
-                    <span
-                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                        isTight ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-                      }`}
-                    >
+                    <span className="text-sm font-extrabold text-slate-900">Status:</span>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${isTight ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
                       {isTight ? 'TIGHT' : 'LOOSE'}
                     </span>
                   </div>
@@ -853,101 +867,92 @@ export default function App() {
 
               <button
                 onClick={() => setActiveTab('intake')}
-                className="px-5 py-2.5 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition shadow-sm"
+                className="px-5 py-3 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition shadow-sm"
               >
                 + New Customer Intake
               </button>
             </div>
 
             {/* Active Queue Table */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-sm font-bold text-gray-800">
-                  Active Queue Orders (Live Mobile &amp; Walk-in Sync)
-                </h3>
+            <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-6">
+              <div className="flex justify-between items-center mb-5">
+                <h3 className="text-sm font-extrabold text-slate-900">Active Queue Orders</h3>
                 <button
                   onClick={() => setActiveTab('progress')}
                   className="text-xs font-bold text-[#0f4b81] flex items-center space-x-1 hover:underline"
                 >
-                  <span>View All Kanban</span>
+                  <span>View Kanban Board</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
 
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-gray-50 text-gray-500 font-bold border-b border-gray-100">
+                  <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200">
                     <tr>
-                      <th className="py-3 px-4">Order ID</th>
-                      <th className="py-3 px-4">Customer</th>
-                      <th className="py-3 px-4">Weight</th>
-                      <th className="py-3 px-4">Physical Container</th>
-                      <th className="py-3 px-4">Payment</th>
-                      <th className="py-3 px-4">Stage</th>
-                      <th className="py-3 px-4 text-right">Mobile App Controls</th>
+                      <th className="py-3.5 px-4">Order ID</th>
+                      <th className="py-3.5 px-4">Customer</th>
+                      <th className="py-3.5 px-4">Weight</th>
+                      <th className="py-3.5 px-4">Container</th>
+                      <th className="py-3.5 px-4">Payment</th>
+                      <th className="py-3.5 px-4">Stage</th>
+                      <th className="py-3.5 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-slate-100">
                     {activeOrders.map((order) => {
                       const isUnweighed = parseFloat(order.total_weight_kg || 0) <= 0;
                       const isPaid = (order.payment_status || '').toLowerCase() === 'paid';
                       return (
-                        <tr key={order.order_id} className="hover:bg-gray-50/70">
-                          <td className="py-3.5 px-4 font-bold text-[#0f4b81]">
+                        <tr key={order.order_id} className="hover:bg-slate-50/80 transition">
+                          <td className="py-4 px-4 font-extrabold text-[#0f4b81]">
                             #KSC-2026-{String(order.order_id).padStart(3, '0')}
                           </td>
-                          <td className="py-3.5 px-4 font-bold text-gray-800">
+                          <td className="py-4 px-4 font-bold text-slate-800">
                             {order.customer_name}
                           </td>
-                          <td className="py-3.5 px-4 font-semibold text-gray-700">
+                          <td className="py-4 px-4 font-semibold text-slate-700">
                             {isUnweighed ? (
                               <button
                                 onClick={() => {
                                   setWeighOrder(order);
                                   setWeighInput('8');
                                 }}
-                                className="px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-[10px] font-bold flex items-center space-x-1 hover:bg-amber-100"
+                                className="px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-[11px] font-bold flex items-center space-x-1 hover:bg-amber-100 shadow-2xs"
                               >
-                                <Scale className="w-3 h-3" />
+                                <Scale className="w-3.5 h-3.5" />
                                 <span>Weigh Now</span>
                               </button>
                             ) : (
                               `${order.total_weight_kg} kg`
                             )}
                           </td>
-                          <td className="py-3.5 px-4 text-gray-600 text-[11px]">
+                          <td className="py-4 px-4 text-slate-600 font-medium">
                             {formatContainerTag(order)}
                           </td>
-                          <td className="py-3.5 px-4">
+                          <td className="py-4 px-4">
                             <button
                               onClick={() =>
-                                handleUpdatePayment(
-                                  order.order_id,
-                                  isPaid ? 'Unpaid' : 'Paid'
-                                )
+                                handleUpdatePayment(order.order_id, isPaid ? 'Unpaid' : 'Paid')
                               }
-                              className={`px-2.5 py-1 rounded-full font-bold text-[10px] ${
+                              className={`px-3 py-1 rounded-full font-bold text-[11px] transition shadow-2xs ${
                                 isPaid
-                                  ? 'bg-green-100 text-green-700'
-                                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                               }`}
                             >
                               {order.payment_status || 'Unpaid'}
                             </button>
                           </td>
-                          <td className="py-3.5 px-4">
-                            <span
-                              className={`px-2.5 py-1 rounded-full font-bold text-[10px] uppercase ${renderStatusBadge(
-                                order.status
-                              )}`}
-                            >
+                          <td className="py-4 px-4">
+                            <span className={`px-3 py-1 rounded-full font-bold text-[11px] uppercase ${renderStatusBadge(order.status)}`}>
                               {order.status === 'Received' ? 'Scheduled' : order.status}
                             </span>
                           </td>
-                          <td className="py-3.5 px-4 text-right space-x-2">
+                          <td className="py-4 px-4 text-right">
                             <button
                               onClick={() => handleAdvanceStage(order.order_id, order.status)}
-                              className="px-3.5 py-1.5 bg-[#0f4b81] text-white rounded-xl font-bold hover:bg-blue-900 transition text-[11px]"
+                              className="px-4 py-2 bg-[#0f4b81] text-white rounded-xl font-bold hover:bg-blue-900 transition text-[11px] shadow-sm"
                             >
                               Advance Stage
                             </button>
@@ -957,7 +962,7 @@ export default function App() {
                     })}
                     {activeOrders.length === 0 && (
                       <tr>
-                        <td colSpan="7" className="py-8 text-center text-gray-400">
+                        <td colSpan="7" className="py-12 text-center text-slate-400 font-medium">
                           No active orders currently in the queue.
                         </td>
                       </tr>
@@ -972,24 +977,24 @@ export default function App() {
         {/* TAB 2: CUSTOMER INTAKE */}
         {activeTab === 'intake' && (
           <div className="p-8 max-w-3xl mx-auto w-full">
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-              <h3 className="text-base font-bold text-gray-900 mb-1">
+            <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8">
+              <h3 className="text-base font-extrabold text-slate-900 mb-1">
                 New Customer Intake Form
               </h3>
-              <p className="text-xs text-gray-500 mb-6">
-                Enforces the 12 kg maximum batch rule and physical basket/bag color identification (synced directly with customer mobile tracking).
+              <p className="text-xs text-slate-500 mb-6 font-medium">
+                Enforces the 12 kg maximum batch rule and physical container color identification (synced with mobile tracking).
               </p>
 
-              <form onSubmit={handleCreateOrder} className="space-y-4">
+              <form onSubmit={handleCreateOrder} className="space-y-5">
                 {(dashboardData?.users || []).length > 0 && (
-                  <div className="p-3.5 bg-blue-50/50 border border-blue-100 rounded-xl">
-                    <label className="block text-[11px] font-bold text-[#0f4b81] mb-1">
+                  <div className="p-4 bg-blue-50/60 border border-blue-100 rounded-xl">
+                    <label className="block text-xs font-extrabold text-[#0f4b81] mb-1.5">
                       Link to Registered Mobile App Customer (Optional)
                     </label>
                     <select
                       value={selectedUserId}
                       onChange={(e) => handleSelectExistingUser(e.target.value)}
-                      className="w-full bg-white border border-blue-200 rounded-lg p-2.5 text-xs text-gray-900 focus:outline-none"
+                      className="w-full bg-white border border-blue-200 rounded-xl p-3 text-xs font-semibold text-slate-900 focus:outline-none"
                     >
                       <option value="">-- New Walk-in / Auto-Create Account --</option>
                       {(dashboardData?.users || []).map((u) => (
@@ -1003,7 +1008,7 @@ export default function App() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                       Customer Full Name
                     </label>
                     <input
@@ -1014,12 +1019,12 @@ export default function App() {
                         setSelectedUserId('');
                         setCustomerName(e.target.value);
                       }}
-                      placeholder="e.g. Carim C. or Joshua"
-                      className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-900 focus:outline-none focus:border-[#0f4b81]"
+                      placeholder="e.g. Carim C."
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                       Contact Number
                     </label>
                     <input
@@ -1028,20 +1033,20 @@ export default function App() {
                       value={contactNumber}
                       onChange={(e) => setContactNumber(e.target.value)}
                       placeholder="09187654321"
-                      className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-900 focus:outline-none focus:border-[#0f4b81]"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                       Service Package
                     </label>
                     <select
                       value={servicePackage}
                       onChange={(e) => setServicePackage(e.target.value)}
-                      className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-900 focus:outline-none focus:border-[#0f4b81]"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
                     >
                       <option>Wash • Dry • Fold (₱140)</option>
                       <option>Wash • Dry (₱110)</option>
@@ -1049,7 +1054,7 @@ export default function App() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                       Total Laundry Weight (kg)
                     </label>
                     <input
@@ -1059,20 +1064,20 @@ export default function App() {
                       required
                       value={weightKg}
                       onChange={(e) => setWeightKg(e.target.value)}
-                      className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-900 focus:outline-none focus:border-[#0f4b81]"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">
-                      Physical Container Color
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Container Color
                     </label>
                     <select
                       value={containerColor}
                       onChange={(e) => setContainerColor(e.target.value)}
-                      className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-900 focus:outline-none focus:border-[#0f4b81]"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
                     >
                       <option value="Blue Bag">Blue Bag</option>
                       <option value="Red Bag">Red Bag</option>
@@ -1082,80 +1087,68 @@ export default function App() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                       Payment Status
                     </label>
                     <select
                       value={paymentMethod}
                       onChange={(e) => setPaymentMethod(e.target.value)}
-                      className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-900 focus:outline-none focus:border-[#0f4b81]"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
                     >
                       <option value="Unpaid">Unpaid (Pay on Pickup)</option>
                       <option value="Paid">Paid (Cash / GCash)</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">
-                      Est. Completion Window
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Completion Window
                     </label>
                     <input
                       type="text"
                       required
                       value={targetTime}
                       onChange={(e) => setTargetTime(e.target.value)}
-                      className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-900 focus:outline-none focus:border-[#0f4b81]"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
                     />
                   </div>
                 </div>
 
                 {/* 12kg Split Preview Box */}
-                <div className="mt-6 p-4 rounded-xl border border-blue-100 bg-blue-50/50 space-y-3">
+                <div className="p-4 rounded-xl border border-blue-100 bg-blue-50/50 space-y-3">
                   <p className="text-xs font-bold text-[#0f4b81] flex items-center space-x-2">
                     <Package className="w-4 h-4" />
-                    <span>
-                      Physical Identification &amp; Batch Split Validation (12kg Max Rule)
-                    </span>
+                    <span>Physical Identification &amp; Batch Split Validation (12kg Max Rule)</span>
                   </p>
 
                   <div className="p-3 bg-white rounded-xl border border-blue-100 flex justify-between items-center text-xs">
-                    <span className="font-bold text-gray-800">
-                      Batch 1: {containerColor} (Assigned Weight: {batch1Weight} kg)
+                    <span className="font-bold text-slate-800">
+                      Batch 1: {containerColor} ({batch1Weight} kg)
                     </span>
-                    <span
-                      className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${
-                        batch1Weight >= 12
-                          ? 'bg-amber-100 text-amber-800'
-                          : 'bg-blue-50 text-[#0f4b81]'
-                      }`}
-                    >
-                      {batch1Weight >= 12 ? 'Max 12kg Batch Limit Reached' : 'Standard Single Load'}
+                    <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${batch1Weight >= 12 ? 'bg-amber-100 text-amber-800' : 'bg-blue-50 text-[#0f4b81]'}`}>
+                      {batch1Weight >= 12 ? 'Max 12kg Limit Reached' : 'Standard Single Load'}
                     </span>
                   </div>
 
                   {batch2Weight > 0 && (
-                    <div className="p-3 bg-white rounded-xl border border-green-200 flex justify-between items-center text-xs">
-                      <span className="font-bold text-gray-800">
-                        Batch 2: {containerColor} (Batch 2) (Assigned Weight: {batch2Weight} kg)
+                    <div className="p-3 bg-white rounded-xl border border-emerald-200 flex justify-between items-center text-xs">
+                      <span className="font-bold text-slate-800">
+                        Batch 2: {containerColor} (Batch 2) ({batch2Weight} kg)
                       </span>
-                      <span className="px-2.5 py-0.5 bg-green-100 text-green-800 rounded-full font-bold text-[10px]">
+                      <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-bold text-[10px]">
                         Automatic Split (&gt; 12kg Rule)
                       </span>
                     </div>
                   )}
                 </div>
 
-                <div className="pt-4">
+                <div className="pt-2">
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full py-3.5 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition shadow-md flex items-center justify-center space-x-2 disabled:opacity-60"
+                    className="w-full py-4 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition shadow-md flex items-center justify-center space-x-2 disabled:opacity-70"
                   >
                     {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                    <span>
-                      {submitting
-                        ? 'Syncing Intake with Cloud & Mobile App...'
-                        : 'Log Intake & Sync to Customer App'}
-                    </span>
+                    <span>{submitting ? 'Syncing with Mobile App...' : 'Log Intake & Sync to Customer App'}</span>
                   </button>
                 </div>
               </form>
@@ -1184,43 +1177,29 @@ export default function App() {
                 });
 
                 return (
-                  <div
-                    key={stageName}
-                    className="bg-white rounded-2xl border border-gray-100 p-4 flex flex-col shadow-sm"
-                  >
-                    <div className="flex justify-between items-center pb-3 border-b border-gray-100 mb-3">
-                      <h4 className="text-xs font-bold text-gray-800">{stageName}</h4>
-                      <span className="w-5 h-5 rounded-full bg-blue-50 text-[#0f4b81] text-[10px] font-bold flex items-center justify-center">
+                  <div key={stageName} className="bg-white rounded-2xl border border-slate-200/80 p-4 flex flex-col shadow-xs">
+                    <div className="flex justify-between items-center pb-3 border-b border-slate-100 mb-3">
+                      <h4 className="text-xs font-extrabold text-slate-800">{stageName}</h4>
+                      <span className="w-5 h-5 rounded-full bg-blue-50 text-[#0f4b81] text-[10px] font-extrabold flex items-center justify-center">
                         {stageOrders.length}
                       </span>
                     </div>
 
                     <div className="space-y-3 flex-1 overflow-y-auto">
                       {stageOrders.map((order) => (
-                        <div
-                          key={order.order_id}
-                          className="p-3.5 rounded-xl border border-gray-100 bg-gray-50/60 space-y-2"
-                        >
+                        <div key={order.order_id} className="p-3.5 rounded-xl border border-slate-200/60 bg-slate-50/60 space-y-2 shadow-2xs">
                           <div className="flex justify-between items-center">
-                            <span className="font-bold text-xs text-[#0f4b81]">
+                            <span className="font-extrabold text-xs text-[#0f4b81]">
                               #KSC-2026-{String(order.order_id).padStart(3, '0')}
                             </span>
-                            <span className="text-[11px] font-semibold text-gray-500">
-                              {parseFloat(order.total_weight_kg || 0) > 0
-                                ? `${order.total_weight_kg} kg`
-                                : 'Unweighed'}
+                            <span className="text-[11px] font-semibold text-slate-500">
+                              {parseFloat(order.total_weight_kg || 0) > 0 ? `${order.total_weight_kg} kg` : 'Unweighed'}
                             </span>
                           </div>
-                          <p className="text-xs font-bold text-gray-900">
-                            {order.customer_name}
-                          </p>
-                          <p className="text-[10px] text-gray-500">
-                            {formatContainerTag(order)}
-                          </p>
+                          <p className="text-xs font-bold text-slate-900">{order.customer_name}</p>
+                          <p className="text-[10px] text-slate-500 font-medium">{formatContainerTag(order)}</p>
                           <div className="flex justify-between items-center pt-1">
-                            <span className="text-[10px] font-bold text-gray-500">
-                              {order.payment_status || 'Unpaid'}
-                            </span>
+                            <span className="text-[10px] font-bold text-slate-500">{order.payment_status || 'Unpaid'}</span>
                             {parseFloat(order.total_weight_kg || 0) <= 0 && (
                               <button
                                 onClick={() => setWeighOrder(order)}
@@ -1232,16 +1211,14 @@ export default function App() {
                           </div>
                           <button
                             onClick={() => handleAdvanceStage(order.order_id, order.status)}
-                            className="w-full py-2 bg-[#0f4b81] text-white rounded-lg text-[10px] font-bold hover:bg-blue-900 transition mt-1"
+                            className="w-full py-2 bg-[#0f4b81] text-white rounded-lg text-[10px] font-bold hover:bg-blue-900 transition mt-1 shadow-2xs"
                           >
                             Advance Stage →
                           </button>
                         </div>
                       ))}
                       {stageOrders.length === 0 && (
-                        <p className="text-[11px] text-gray-400 text-center py-8">
-                          No orders in {stageName}
-                        </p>
+                        <p className="text-[11px] text-slate-400 text-center py-10 font-medium">No orders</p>
                       )}
                     </div>
                   </div>
@@ -1254,30 +1231,27 @@ export default function App() {
         {/* TAB 4: PICKUP VERIFICATION */}
         {activeTab === 'pickup' && (
           <div className="p-8 max-w-2xl mx-auto w-full space-y-6">
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 space-y-6">
+            <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-6">
               <div>
-                <h3 className="text-base font-bold text-gray-900 mb-1">
+                <h3 className="text-base font-extrabold text-slate-900 mb-1">
                   Pickup Verification Counter
                 </h3>
-                <p className="text-xs text-gray-500">
-                  Matches physical container descriptions with customer profiles for secure retrieval without numeric bag tags.
+                <p className="text-xs text-slate-500 font-medium">
+                  Matches physical container descriptions with customer profiles for secure retrieval.
                 </p>
               </div>
 
-              <div className="flex space-x-2">
+              <div className="flex space-x-2.5">
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by Order ID (e.g. 1) or Customer Name (e.g. Carim)..."
-                  className="flex-1 bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-900 focus:outline-none focus:border-[#0f4b81]"
+                  placeholder="Search by Order ID or Customer Name..."
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
                 />
                 <button
                   onClick={() => {
-                    const cleanQuery = searchQuery
-                      .toLowerCase()
-                      .replace('#ksc-2026-', '')
-                      .trim();
+                    const cleanQuery = searchQuery.toLowerCase().replace('#ksc-2026-', '').trim();
                     const found = orders.find(
                       (o) =>
                         o.customer_name.toLowerCase().includes(cleanQuery) ||
@@ -1285,35 +1259,33 @@ export default function App() {
                     );
                     setVerifiedOrder(found || null);
                   }}
-                  className="px-6 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition flex items-center space-x-2"
+                  className="px-6 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition flex items-center space-x-2 shadow-sm"
                 >
                   <Search className="w-4 h-4" />
-                  <span>Search Order</span>
+                  <span>Search</span>
                 </button>
               </div>
 
               {verifiedOrder && (
                 <div className="p-5 rounded-2xl border border-blue-100 bg-blue-50/30 space-y-4">
                   <div className="flex justify-between items-center">
-                    <span className="font-bold text-xs text-[#0f4b81]">
+                    <span className="font-extrabold text-xs text-[#0f4b81]">
                       Order #KSC-2026-{String(verifiedOrder.order_id).padStart(3, '0')}
                     </span>
-                    <span className="px-2.5 py-1 bg-green-100 text-green-800 rounded-full text-[10px] font-bold">
+                    <span className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-[10px] font-bold">
                       {verifiedOrder.status}
                     </span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <p className="text-[11px] text-gray-500">Customer Name</p>
-                      <p className="text-sm font-bold text-gray-900">
-                        {verifiedOrder.customer_name}
-                      </p>
+                      <p className="text-[11px] font-semibold text-slate-500">Customer Name</p>
+                      <p className="text-sm font-extrabold text-slate-900">{verifiedOrder.customer_name}</p>
                     </div>
                     <div>
-                      <p className="text-[11px] text-gray-500">Payment Status</p>
+                      <p className="text-[11px] font-semibold text-slate-500">Payment Status</p>
                       <div className="flex items-center space-x-2 mt-0.5">
-                        <span className="text-sm font-bold text-green-700">
+                        <span className="text-sm font-extrabold text-emerald-700">
                           {verifiedOrder.payment_status || 'Unpaid'}
                         </span>
                         <button
@@ -1325,21 +1297,17 @@ export default function App() {
                           }
                           className="text-[10px] underline text-[#0f4b81] font-bold"
                         >
-                          Toggle Paid
+                          Toggle
                         </button>
                       </div>
                     </div>
                   </div>
 
-                  <div className="p-3.5 bg-white rounded-xl border border-gray-100 flex items-center space-x-3">
-                    <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />
+                  <div className="p-3.5 bg-white rounded-xl border border-slate-200/80 flex items-center space-x-3 shadow-2xs">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
                     <div>
-                      <p className="text-xs font-bold text-gray-800">
-                        Physical Container Description (Visual Confirmation)
-                      </p>
-                      <p className="text-[11px] text-gray-600 mt-0.5">
-                        {formatContainerTag(verifiedOrder)} • Verified by Staff
-                      </p>
+                      <p className="text-xs font-bold text-slate-800">Physical Container Description</p>
+                      <p className="text-[11px] text-slate-600 mt-0.5 font-medium">{formatContainerTag(verifiedOrder)}</p>
                     </div>
                   </div>
 
@@ -1350,50 +1318,43 @@ export default function App() {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ status: 'Picked Up' })
                       });
-                      showToast(
-                        `Order #${verifiedOrder.order_id} confirmed Picked Up! Mobile App Rating Box triggered.`
-                      );
+                      showToast(`Order #${verifiedOrder.order_id} confirmed Picked Up! Rating prompt triggered.`);
                       setVerifiedOrder(null);
                       fetchDashboard();
                     }}
-                    className="w-full py-3.5 bg-[#15803d] text-white rounded-xl font-bold text-xs hover:bg-green-800 transition shadow-md"
+                    className="w-full py-3.5 bg-emerald-700 text-white rounded-xl font-bold text-xs hover:bg-emerald-800 transition shadow-sm"
                   >
                     Confirm Pickup &amp; Trigger Customer Rating Modal
                   </button>
                 </div>
               )}
 
-              {/* Ready for Pick-up Quick List */}
-              <div className="pt-4 border-t border-gray-100">
-                <h4 className="text-xs font-bold text-gray-700 mb-3">
+              {/* Ready for Pickup Quick List */}
+              <div className="pt-4 border-t border-slate-100">
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">
                   Orders Ready for Pick-up
                 </h4>
                 <div className="space-y-2">
                   {orders
                     .filter((o) => o.status === 'Ready for Pick-up')
                     .map((o) => (
-                      <div
-                        key={o.order_id}
-                        className="p-3 rounded-xl border border-gray-100 bg-gray-50 flex justify-between items-center text-xs"
-                      >
+                      <div key={o.order_id} className="p-3.5 rounded-xl border border-slate-200/80 bg-slate-50 flex justify-between items-center text-xs">
                         <div>
-                          <span className="font-bold text-[#0f4b81]">
+                          <span className="font-extrabold text-[#0f4b81]">
                             #KSC-2026-{String(o.order_id).padStart(3, '0')}
                           </span>{' '}
-                          • <span className="font-semibold">{o.customer_name}</span>
+                          • <span className="font-bold text-slate-800">{o.customer_name}</span>
                         </div>
                         <button
                           onClick={() => setVerifiedOrder(o)}
-                          className="px-3 py-1 bg-[#0f4b81] text-white rounded-lg font-bold text-[11px]"
+                          className="px-3 py-1.5 bg-[#0f4b81] text-white rounded-lg font-bold text-[11px] shadow-2xs"
                         >
                           Verify
                         </button>
                       </div>
                     ))}
                   {orders.filter((o) => o.status === 'Ready for Pick-up').length === 0 && (
-                    <p className="text-xs text-gray-400">
-                      No orders currently waiting in Ready for Pick-up.
-                    </p>
+                    <p className="text-xs text-slate-400 font-medium">No orders currently waiting for pickup.</p>
                   )}
                 </div>
               </div>
@@ -1404,73 +1365,54 @@ export default function App() {
         {/* TAB 5: SALES ANALYTICS */}
         {activeTab === 'sales' && (
           <div className="p-8 space-y-6 max-w-5xl mx-auto w-full">
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 space-y-6">
+            <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-6">
               <div>
-                <h3 className="text-base font-bold text-gray-900 mb-1">
+                <h3 className="text-base font-extrabold text-slate-900 mb-1">
                   Sales Analytics &amp; Revenue Reports
                 </h3>
-                <p className="text-xs text-gray-500">
-                  Tracks cumulative shop earnings against processing volume and customer app feedback.
+                <p className="text-xs text-slate-500 font-medium">
+                  Tracks cumulative shop earnings against monthly processing volume.
                 </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                <div className="p-5 bg-gray-50 rounded-2xl border border-gray-100">
-                  <p className="text-xs text-gray-500 font-semibold">
-                    Monthly Baseline Sales (November 2026)
-                  </p>
-                  <p className="text-2xl font-black text-gray-900 mt-1">₱24,500.00</p>
-                  <span className="text-xs font-bold text-green-600">
-                    + ₱{estimatedLiveSales.toLocaleString()} live queue
-                  </span>
+                <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200/80">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Monthly Baseline Sales</p>
+                  <p className="text-2xl font-black text-slate-900 mt-1">₱24,500.00</p>
+                  <span className="text-xs font-bold text-emerald-600">+ ₱{estimatedLiveSales.toLocaleString()} live queue</span>
                 </div>
-                <div className="p-5 bg-gray-50 rounded-2xl border border-gray-100">
-                  <p className="text-xs text-gray-500 font-semibold">
-                    Total Volume Processed
-                  </p>
-                  <p className="text-2xl font-black text-[#0f4b81] mt-1">
-                    {(3000 + totalProcessedKg).toLocaleString()} kg
-                  </p>
-                  <span className="text-[11px] text-gray-500">
-                    Includes {totalProcessedKg} kg active DB volume
-                  </span>
+                <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200/80">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Volume Processed</p>
+                  <p className="text-2xl font-black text-[#0f4b81] mt-1">{(3000 + totalProcessedKg).toLocaleString()} kg</p>
+                  <span className="text-[11px] text-slate-500 font-medium">Includes {totalProcessedKg} kg active DB volume</span>
                 </div>
-                <div className="p-5 bg-gray-50 rounded-2xl border border-gray-100">
-                  <p className="text-xs text-gray-500 font-semibold">Completed Orders</p>
-                  <p className="text-2xl font-black text-gray-900 mt-1">
-                    {completedOrders.length}
-                  </p>
-                  <span className="text-[11px] text-gray-500">Picked Up &amp; Verified</span>
+                <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200/80">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Completed Orders</p>
+                  <p className="text-2xl font-black text-slate-900 mt-1">{completedOrders.length}</p>
+                  <span className="text-[11px] text-slate-500 font-medium">Picked Up &amp; Verified</span>
                 </div>
               </div>
 
               {/* Customer Reviews Feed */}
-              <div className="pt-4 border-t border-gray-100">
-                <h4 className="text-xs font-bold text-gray-700 mb-3 flex items-center space-x-2">
+              <div className="pt-4 border-t border-slate-100">
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3 flex items-center space-x-2">
                   <Star className="w-4 h-4 text-amber-500" />
                   <span>Live Customer Mobile App Ratings</span>
                 </h4>
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   {(dashboardData?.reviews || []).map((rev) => (
-                    <div
-                      key={rev.review_id}
-                      className="p-3.5 rounded-xl border border-gray-100 bg-gray-50/70 flex justify-between items-center text-xs"
-                    >
+                    <div key={rev.review_id} className="p-4 rounded-xl border border-slate-200/80 bg-slate-50 flex justify-between items-center text-xs">
                       <div>
-                        <p className="font-bold text-gray-900">{rev.customer_name}</p>
-                        <p className="text-gray-600 text-[11px] mt-0.5">
-                          {rev.feedback || 'Rated service via mobile app'}
-                        </p>
+                        <p className="font-extrabold text-slate-900">{rev.customer_name}</p>
+                        <p className="text-slate-600 text-[11px] mt-0.5 font-medium">{rev.feedback || 'Rated service via mobile app'}</p>
                       </div>
-                      <span className="px-2.5 py-1 bg-amber-100 text-amber-800 rounded-full font-bold text-[11px]">
+                      <span className="px-3 py-1 bg-amber-100 text-amber-800 rounded-full font-extrabold text-[11px]">
                         ★ {rev.rating} / 5
                       </span>
                     </div>
                   ))}
                   {(!dashboardData?.reviews || dashboardData.reviews.length === 0) && (
-                    <p className="text-xs text-gray-400">
-                      No customer reviews submitted yet.
-                    </p>
+                    <p className="text-xs text-slate-400 font-medium">No customer reviews submitted yet.</p>
                   )}
                 </div>
               </div>
@@ -1481,88 +1423,66 @@ export default function App() {
         {/* TAB 6: UTILITY ANALYTICS */}
         {activeTab === 'utility' && (
           <div className="p-8 max-w-4xl mx-auto w-full space-y-6">
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 space-y-6">
+            <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-6">
               <div>
-                <h3 className="text-base font-bold text-gray-900 mb-1">
+                <h3 className="text-base font-extrabold text-slate-900 mb-1">
                   Utility Cost Tracking &amp; Overhead Calculator (₱{overheadPerKg}/kg)
                 </h3>
-                <p className="text-xs text-gray-500">
-                  Computes utility and supply expenses per kilo washed against owner monthly baselines (barangay-based electric operation without LPG). Adjust any baseline below to simulate overhead.
+                <p className="text-xs text-slate-500 font-medium">
+                  Computes utility expenses per kilo against monthly baselines (barangay-based electric operation without LPG).
                 </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="p-4 bg-blue-50/60 rounded-2xl border border-blue-100">
-                  <label className="text-xs font-bold text-[#0f4b81] block">
-                    Water Utility (₱)
-                  </label>
+                  <label className="text-xs font-extrabold text-[#0f4b81] block uppercase tracking-wider">Water Utility (₱)</label>
                   <input
                     type="number"
                     value={waterCost}
                     onChange={(e) => setWaterCost(e.target.value)}
-                    className="w-full mt-1.5 bg-white border border-blue-200 rounded-lg px-2.5 py-1.5 text-base font-black text-[#0f4b81]"
+                    className="w-full mt-1.5 bg-white border border-blue-200 rounded-xl px-3 py-2 text-base font-black text-[#0f4b81]"
                   />
-                  <p className="text-[10px] text-gray-500 mt-1">Monthly flat &amp; metered</p>
                 </div>
                 <div className="p-4 bg-amber-50/60 rounded-2xl border border-amber-100">
-                  <label className="text-xs font-bold text-amber-800 block">
-                    Electricity (₱)
-                  </label>
+                  <label className="text-xs font-extrabold text-amber-800 block uppercase tracking-wider">Electricity (₱)</label>
                   <input
                     type="number"
                     value={electricityCost}
                     onChange={(e) => setElectricityCost(e.target.value)}
-                    className="w-full mt-1.5 bg-white border border-amber-200 rounded-lg px-2.5 py-1.5 text-base font-black text-amber-800"
+                    className="w-full mt-1.5 bg-white border border-amber-200 rounded-xl px-3 py-2 text-base font-black text-amber-800"
                   />
-                  <p className="text-[10px] text-gray-500 mt-1">Electric washers &amp; dryers</p>
                 </div>
-                <div className="p-4 bg-green-50/60 rounded-2xl border border-green-100">
-                  <label className="text-xs font-bold text-green-800 block">
-                    Detergent &amp; Downy (₱)
-                  </label>
+                <div className="p-4 bg-emerald-50/60 rounded-2xl border border-emerald-100">
+                  <label className="text-xs font-extrabold text-emerald-800 block uppercase tracking-wider">Supplies (₱)</label>
                   <input
                     type="number"
                     value={suppliesCost}
                     onChange={(e) => setSuppliesCost(e.target.value)}
-                    className="w-full mt-1.5 bg-white border border-green-200 rounded-lg px-2.5 py-1.5 text-base font-black text-green-800"
+                    className="w-full mt-1.5 bg-white border border-emerald-200 rounded-xl px-3 py-2 text-base font-black text-emerald-800"
                   />
-                  <p className="text-[10px] text-gray-500 mt-1">Supplies &amp; softeners</p>
                 </div>
-                <div className="p-4 bg-gray-50 rounded-2xl border border-gray-200">
-                  <label className="text-xs font-bold text-gray-700 block">
-                    Monthly Volume (kg)
-                  </label>
+                <div className="p-4 bg-slate-100 rounded-2xl border border-slate-200">
+                  <label className="text-xs font-extrabold text-slate-700 block uppercase tracking-wider">Volume (kg)</label>
                   <input
                     type="number"
                     value={monthlyVolume}
                     onChange={(e) => setMonthlyVolume(e.target.value)}
-                    className="w-full mt-1.5 bg-white border border-gray-300 rounded-lg px-2.5 py-1.5 text-base font-black text-gray-900"
+                    className="w-full mt-1.5 bg-white border border-slate-300 rounded-xl px-3 py-2 text-base font-black text-slate-900"
                   />
-                  <p className="text-[10px] text-gray-500 mt-1">Total monthly kilos</p>
                 </div>
               </div>
 
-              <div className="p-6 bg-gray-900 text-white rounded-2xl space-y-3">
+              <div className="p-6 bg-slate-900 text-white rounded-2xl space-y-3 shadow-lg">
                 <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold uppercase tracking-wider text-green-400">
+                  <span className="text-xs font-extrabold uppercase tracking-widest text-emerald-400">
                     Formula Verification (Chapter 3)
                   </span>
-                  <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full font-bold text-[10px]">
+                  <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 rounded-full font-extrabold text-[10px]">
                     Verified: ₱{overheadPerKg} / kg
                   </span>
                 </div>
-                <p className="text-xs font-mono text-gray-200">
-                  Overhead per Kilo = (Water [₱{Number(waterCost).toLocaleString()}] + Electricity [₱
-                  {Number(electricityCost).toLocaleString()}] + Supplies [₱
-                  {Number(suppliesCost).toLocaleString()}]) / Monthly Volume [
-                  {Number(monthlyVolume).toLocaleString()} kg] ={' '}
-                  <span className="text-green-400 font-bold">₱{overheadPerKg} / kg</span>
-                </p>
-                <p className="text-[11px] text-gray-400">
-                  Based on KSC Laundry Shop owner&apos;s baseline records of ₱
-                  {totalUtilityExpense.toLocaleString()} total monthly utility expenses divided by{' '}
-                  {Number(monthlyVolume).toLocaleString()} kg monthly volume, yielding ₱
-                  {overheadPerKg} per kilo overhead.
+                <p className="text-xs font-mono text-slate-200">
+                  Overhead/kg = (Water [₱{Number(waterCost).toLocaleString()}] + Elec [₱{Number(electricityCost).toLocaleString()}] + Supplies [₱{Number(suppliesCost).toLocaleString()}]) / Volume [{Number(monthlyVolume).toLocaleString()} kg] = <span className="text-emerald-400 font-extrabold">₱{overheadPerKg} / kg</span>
                 </p>
               </div>
             </div>
@@ -1572,28 +1492,25 @@ export default function App() {
         {/* TAB 7: SETTINGS & ANNOUNCEMENTS */}
         {activeTab === 'settings' && (
           <div className="p-8 max-w-3xl mx-auto w-full space-y-6">
-            {/* Live Shop Announcement Broadcaster */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 space-y-4">
-              <div className="flex items-center space-x-2">
-                <Megaphone className="w-5 h-5 text-[#0f4b81]" />
+            <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-4">
+              <div className="flex items-center space-x-3">
+                <div className="p-2.5 bg-blue-50 text-[#0f4b81] rounded-xl">
+                  <Megaphone className="w-5 h-5" />
+                </div>
                 <div>
-                  <h3 className="text-base font-bold text-gray-900">
-                    Mobile App Announcements Manager
-                  </h3>
-                  <p className="text-xs text-gray-500">
-                    Publish or remove live Shop Announcements displayed on the KSCync Mobile App Home screen.
-                  </p>
+                  <h3 className="text-base font-extrabold text-slate-900">Mobile App Announcements</h3>
+                  <p className="text-xs text-slate-500 font-medium">Publish or remove shop notices displayed on the mobile app home screen.</p>
                 </div>
               </div>
 
-              <form onSubmit={handlePostAnnouncement} className="space-y-3">
+              <form onSubmit={handlePostAnnouncement} className="space-y-3.5 pt-2">
                 <input
                   type="text"
                   required
                   value={announcementTitle}
                   onChange={(e) => setAnnouncementTitle(e.target.value)}
                   placeholder="Announcement Title (e.g. Holiday Schedule Notice)"
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-900 focus:outline-none focus:border-[#0f4b81]"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
                 />
                 <textarea
                   rows="2"
@@ -1601,39 +1518,29 @@ export default function App() {
                   value={announcementMessage}
                   onChange={(e) => setAnnouncementMessage(e.target.value)}
                   placeholder="Message body displayed to customers..."
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-900 focus:outline-none focus:border-[#0f4b81]"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
                 />
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-5 py-2.5 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition flex items-center space-x-2 disabled:opacity-60"
+                  className="px-6 py-3 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition flex items-center space-x-2 disabled:opacity-70 shadow-sm"
                 >
                   {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  <span>
-                    {submitting
-                      ? 'Publishing to Mobile App...'
-                      : 'Publish Announcement to Mobile App'}
-                  </span>
+                  <span>Publish to Mobile App</span>
                 </button>
               </form>
 
-              {/* Active Announcements List */}
-              <div className="pt-4 border-t border-gray-100 space-y-2">
-                <p className="text-xs font-bold text-gray-700">Active Mobile Announcements</p>
+              <div className="pt-4 border-t border-slate-100 space-y-2.5">
+                <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Active Announcements</p>
                 {(dashboardData?.announcements || []).map((item) => (
-                  <div
-                    key={item.announcement_id}
-                    className="p-3.5 rounded-xl border border-gray-100 bg-gray-50 flex justify-between items-start gap-3"
-                  >
+                  <div key={item.announcement_id} className="p-4 rounded-xl border border-slate-200/80 bg-slate-50 flex justify-between items-start gap-3">
                     <div>
-                      <p className="text-xs font-bold text-gray-900">{item.title}</p>
-                      <p className="text-[11px] text-gray-600 mt-0.5">
-                        {item.message || item.content}
-                      </p>
+                      <p className="text-xs font-extrabold text-slate-900">{item.title}</p>
+                      <p className="text-[11px] text-slate-600 mt-0.5 font-medium">{item.message || item.content}</p>
                     </div>
                     <button
                       onClick={() => handleDeleteAnnouncement(item.announcement_id)}
-                      className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg"
+                      className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition"
                       title="Delete Announcement"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -1643,14 +1550,10 @@ export default function App() {
               </div>
             </div>
 
-            {/* Machine Capacity Threshold Control */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 space-y-4">
-              <h3 className="text-base font-bold text-gray-900">
-                Shop Machine Capacity Limit
-              </h3>
-              <p className="text-xs text-gray-500">
-                Controls the denominator for the Shop Capacity &amp; Workload bar across Web and Mobile.
-              </p>
+            {/* Shop Capacity Limit */}
+            <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-4">
+              <h3 className="text-base font-extrabold text-slate-900">Shop Machine Capacity Limit</h3>
+              <p className="text-xs text-slate-500 font-medium">Controls the denominator for the Shop Capacity &amp; Workload bar.</p>
               <div className="flex items-center space-x-4">
                 <input
                   type="number"
@@ -1658,53 +1561,9 @@ export default function App() {
                   max="20"
                   value={shopCapacityLimit}
                   onChange={(e) => setShopCapacityLimit(Number(e.target.value) || 8)}
-                  className="w-24 bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-xs font-bold text-gray-900"
+                  className="w-24 bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-extrabold text-slate-900 text-center"
                 />
-                <span className="text-xs text-gray-600 font-semibold">
-                  Active Washing &amp; Drying Machines (Default: 8)
-                </span>
-              </div>
-            </div>
-
-            {/* RBAC Permissions */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 space-y-6">
-              <div>
-                <h3 className="text-base font-bold text-gray-900 mb-1">
-                  Role-Based Access Control (RBAC)
-                </h3>
-                <p className="text-xs text-gray-500">
-                  Manages feature permissions across Administrator, Staff, and Customer tiers.
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                {[
-                  {
-                    role: 'Administrator Role',
-                    desc: 'Full access to utility analytics, sales reports, announcements, and user management.'
-                  },
-                  {
-                    role: 'Staff / Counter Worker Role',
-                    desc: 'Access to customer intake logger, physical container assignment, and stage progression.'
-                  },
-                  {
-                    role: 'Customer Mobile User Role',
-                    desc: 'Access to drop-off scheduling, live stage tracker, ratings, and push notifications.'
-                  }
-                ].map((item, idx) => (
-                  <div
-                    key={idx}
-                    className="p-4 rounded-xl border border-gray-100 bg-gray-50/60 flex justify-between items-center"
-                  >
-                    <div>
-                      <p className="text-xs font-bold text-gray-900">{item.role}</p>
-                      <p className="text-[11px] text-gray-500 mt-0.5">{item.desc}</p>
-                    </div>
-                    <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full font-bold text-[10px]">
-                      Enabled
-                    </span>
-                  </div>
-                ))}
+                <span className="text-xs text-slate-700 font-bold">Active Washing &amp; Drying Machines (Default: 8)</span>
               </div>
             </div>
           </div>
@@ -1713,7 +1572,7 @@ export default function App() {
         {/* TAB 8: ADMIN PROFILE PAGE */}
         {activeTab === 'profile' && (
           <div className="p-8 max-w-4xl mx-auto w-full space-y-6">
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 flex flex-wrap items-center justify-between gap-6">
+            <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 flex flex-wrap items-center justify-between gap-6">
               <div className="flex items-center space-x-5">
                 <div className="w-20 h-20 rounded-full bg-[#0f4b81] text-white font-black text-2xl flex items-center justify-center shadow-md">
                   {adminProfile.fullName
@@ -1725,16 +1584,14 @@ export default function App() {
                 </div>
                 <div>
                   <div className="flex items-center space-x-2">
-                    <h3 className="text-xl font-black text-gray-900">
-                      {adminProfile.fullName}
-                    </h3>
-                    <span className="px-2.5 py-0.5 bg-blue-50 text-[#0f4b81] rounded-full text-[10px] font-bold flex items-center space-x-1">
+                    <h3 className="text-xl font-black text-slate-900">{adminProfile.fullName}</h3>
+                    <span className="px-3 py-0.5 bg-blue-50 text-[#0f4b81] rounded-full text-[10px] font-bold flex items-center space-x-1 border border-blue-200">
                       <ShieldCheck className="w-3 h-3" />
                       <span>Verified Owner</span>
                     </span>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">{adminProfile.role}</p>
-                  <div className="flex flex-wrap gap-4 mt-3 text-[11px] text-gray-600">
+                  <p className="text-xs text-slate-500 mt-1 font-medium">{adminProfile.role}</p>
+                  <div className="flex flex-wrap gap-4 mt-3 text-[11px] text-slate-600 font-medium">
                     <span className="flex items-center space-x-1">
                       <MapPin className="w-3.5 h-3.5 text-[#0f4b81]" />
                       <span>{adminProfile.location}</span>
@@ -1752,71 +1609,50 @@ export default function App() {
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 space-y-4">
-              <h4 className="text-sm font-bold text-gray-900">
-                Shop &amp; Account Details
-              </h4>
+            <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-4">
+              <h4 className="text-sm font-extrabold text-slate-900">Shop &amp; Account Details</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">
-                    Admin Full Name
-                  </label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Admin Full Name</label>
                   <input
                     type="text"
                     value={adminProfile.fullName}
-                    onChange={(e) =>
-                      setAdminProfile({ ...adminProfile, fullName: e.target.value })
-                    }
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-900"
+                    onChange={(e) => setAdminProfile({ ...adminProfile, fullName: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">
-                    Shop Display Name
-                  </label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Shop Display Name</label>
                   <input
                     type="text"
                     value={adminProfile.shopName}
-                    onChange={(e) =>
-                      setAdminProfile({ ...adminProfile, shopName: e.target.value })
-                    }
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-900"
+                    onChange={(e) => setAdminProfile({ ...adminProfile, shopName: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">
-                    Contact Phone Number
-                  </label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Contact Phone</label>
                   <input
                     type="text"
                     value={adminProfile.phone}
-                    onChange={(e) =>
-                      setAdminProfile({ ...adminProfile, phone: e.target.value })
-                    }
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-900"
+                    onChange={(e) => setAdminProfile({ ...adminProfile, phone: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">
-                    Operating Hours Notice
-                  </label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Operating Hours Notice</label>
                   <input
                     type="text"
                     value={adminProfile.operatingHours}
-                    onChange={(e) =>
-                      setAdminProfile({
-                        ...adminProfile,
-                        operatingHours: e.target.value
-                      })
-                    }
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-900"
+                    onChange={(e) => setAdminProfile({ ...adminProfile, operatingHours: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900"
                   />
                 </div>
               </div>
               <div className="pt-2">
                 <button
-                  onClick={() => showToast('Admin Profile & Shop Details saved!')}
-                  className="px-5 py-2.5 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition flex items-center space-x-2"
+                  onClick={() => showToast('Profile details updated successfully.')}
+                  className="px-6 py-3 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition flex items-center space-x-2 shadow-sm"
                 >
                   <Save className="w-4 h-4" />
                   <span>Save Profile Changes</span>
@@ -1824,34 +1660,32 @@ export default function App() {
               </div>
             </div>
 
-            {/* Registered Mobile App Users Directory */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 space-y-4">
-              <h4 className="text-sm font-bold text-gray-900">
-                Registered Mobile App Customers &amp; Push Notification Status
-              </h4>
+            {/* Registered Customers Directory */}
+            <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-4">
+              <h4 className="text-sm font-extrabold text-slate-900">Registered Mobile App Customers</h4>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-gray-50 text-gray-500 font-bold border-b border-gray-100">
+                  <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200">
                     <tr>
                       <th className="py-3 px-4">Full Name</th>
                       <th className="py-3 px-4">Phone</th>
                       <th className="py-3 px-4">Role</th>
-                      <th className="py-3 px-4">Expo Push Token</th>
+                      <th className="py-3 px-4">Push Token Status</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-slate-100">
                     {(dashboardData?.users || []).map((u) => (
                       <tr key={u.user_id || u.email}>
-                        <td className="py-3 px-4 font-bold text-gray-900">{u.full_name}</td>
-                        <td className="py-3 px-4 text-gray-600">{u.phone_number}</td>
-                        <td className="py-3 px-4 capitalize text-gray-600">{u.role}</td>
-                        <td className="py-3 px-4">
+                        <td className="py-3.5 px-4 font-bold text-slate-900">{u.full_name}</td>
+                        <td className="py-3.5 px-4 text-slate-600 font-medium">{u.phone_number}</td>
+                        <td className="py-3.5 px-4 capitalize text-slate-600 font-medium">{u.role}</td>
+                        <td className="py-3.5 px-4">
                           {u.expo_push_token ? (
-                            <span className="px-2.5 py-0.5 bg-green-100 text-green-700 rounded-full text-[10px] font-bold">
+                            <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 rounded-full text-[10px] font-bold">
                               Registered
                             </span>
                           ) : (
-                            <span className="px-2.5 py-0.5 bg-gray-100 text-gray-500 rounded-full text-[10px] font-bold">
+                            <span className="px-2.5 py-0.5 bg-slate-100 text-slate-500 rounded-full text-[10px] font-bold">
                               Pending Login
                             </span>
                           )}
@@ -1860,8 +1694,8 @@ export default function App() {
                     ))}
                     {(!dashboardData?.users || dashboardData.users.length === 0) && (
                       <tr>
-                        <td colSpan="4" className="py-4 text-center text-gray-400">
-                          Customer profiles sync automatically when orders are placed.
+                        <td colSpan="4" className="py-6 text-center text-slate-400 font-medium">
+                          No customer accounts registered yet.
                         </td>
                       </tr>
                     )}
