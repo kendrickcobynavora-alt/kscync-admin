@@ -46,20 +46,19 @@ export default function App() {
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState({ message: '', type: 'success' });
 
-  // Customer Intake Form State
+  // Customer Intake Form State (Walk-in Aligned)
   const [selectedUserId, setSelectedUserId] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
-  const [servicePackage, setServicePackage] = useState('Wash • Dry • Fold (₱140)');
   const [weightKg, setWeightKg] = useState('14');
-  const [containerColor, setContainerColor] = useState('Green Tote Bag');
-  const [paymentMethod, setPaymentMethod] = useState('Unpaid');
-  const [targetTime, setTargetTime] = useState('Same Day, 6:00 PM - 8:00 PM');
+  const [containerDescription, setContainerDescription] = useState('Green Puregold Tote Bag');
+  const [paymentStatus, setPaymentStatus] = useState('Unpaid');
+  const [targetCompletionTime, setTargetCompletionTime] = useState('Same Day, 6:00 PM - 8:00 PM');
 
   // Weigh-in Modal State
   const [weighOrder, setWeighOrder] = useState(null);
   const [weighInput, setWeighInput] = useState('8');
-  const [weighColor, setWeighColor] = useState('Blue Bag');
+  const [weighDescription, setWeighDescription] = useState('Blue Laundry Bag');
 
   // Pickup Verification State
   const [searchQuery, setSearchQuery] = useState('');
@@ -138,7 +137,6 @@ export default function App() {
         localStorage.setItem('ksc_admin_auth', 'true');
         showToast('Successfully signed in to KSCync Admin Hub');
       } else {
-        // Fallback check for local default admin credentials if backend user record is missing
         if (
           (loginUsername.trim().toLowerCase() === 'admin@kscync.local' ||
             loginUsername.trim().toLowerCase() === 'admin') &&
@@ -152,7 +150,6 @@ export default function App() {
         }
       }
     } catch (err) {
-      // Offline / Render cold start fallback for default admin
       if (
         (loginUsername.trim().toLowerCase() === 'admin@kscync.local' ||
           loginUsername.trim().toLowerCase() === 'admin') &&
@@ -162,7 +159,7 @@ export default function App() {
         localStorage.setItem('ksc_admin_auth', 'true');
         showToast('Successfully signed in');
       } else {
-        setLoginError('Unable to connect to authentication server. Check your backend connection.');
+        setLoginError('Unable to connect to authentication server.');
       }
     } finally {
       setLoginLoading(false);
@@ -266,11 +263,11 @@ export default function App() {
     const b1 = Math.min(w, 12);
     const b2 = w > 12 ? Number((w - 12).toFixed(2)) : 0;
 
-    const containers = [{ basket_number: 1, color: weighColor, assigned_weight_kg: b1 }];
+    const containers = [{ basket_number: 1, color: weighDescription, assigned_weight_kg: b1 }];
     if (b2 > 0) {
       containers.push({
         basket_number: 2,
-        color: `${weighColor} (Batch 2)`,
+        color: `${weighDescription} (Batch 2)`,
         assigned_weight_kg: b2
       });
     }
@@ -352,7 +349,7 @@ export default function App() {
       const containers = [
         {
           basket_number: 1,
-          color: containerColor,
+          color: containerDescription,
           assigned_weight_kg: batch1Weight
         }
       ];
@@ -360,11 +357,12 @@ export default function App() {
       if (batch2Weight > 0) {
         containers.push({
           basket_number: 2,
-          color: `${containerColor} (Batch 2)`,
+          color: `${containerDescription} (Batch 2)`,
           assigned_weight_kg: batch2Weight
         });
       }
 
+      // Explicitly including booking_type: 'walk-in' to satisfy database constraint
       const res = await fetch(`${API_BASE}/orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -372,12 +370,12 @@ export default function App() {
           user_id: resolvedUserId,
           customer_name: customerName.trim(),
           phone_number: contactNumber.trim(),
-          service_package: servicePackage,
+          booking_type: 'walk-in',
           total_weight_kg: parsedWeight,
           estimated_weight: parsedWeight,
-          container_description: containerColor,
-          target_completion_time: targetTime,
-          payment_status: paymentMethod,
+          container_description: containerDescription,
+          target_completion_time: targetCompletionTime,
+          payment_status: paymentStatus,
           status: 'Received at Shop',
           containers
         })
@@ -388,8 +386,8 @@ export default function App() {
       if (res.ok) {
         showToast(
           batch2Weight > 0
-            ? `Order logged & split into Batch 1 (${batch1Weight}kg) & Batch 2 (${batch2Weight}kg).`
-            : `Order successfully logged under ${containerColor} (${batch1Weight}kg).`
+            ? `Walk-in order logged & split into Batch 1 (${batch1Weight}kg) & Batch 2 (${batch2Weight}kg).`
+            : `Walk-in order successfully logged under "${containerDescription}" (${batch1Weight}kg).`
         );
         setSelectedUserId('');
         setCustomerName('');
@@ -397,7 +395,7 @@ export default function App() {
         await fetchDashboard();
         setActiveTab('dashboard');
       } else {
-        showToast(data.error || data.message || 'Server error logging order.', 'error');
+        showToast(data.error || data.message || 'Server error logging walk-in order.', 'error');
       }
     } catch (err) {
       showToast('Connection error connecting to backend.', 'error');
@@ -421,7 +419,6 @@ export default function App() {
         body: JSON.stringify({
           title: announcementTitle.trim(),
           message: announcementMessage.trim(),
-          content: announcementMessage.trim(),
           is_active: true
         })
       });
@@ -680,7 +677,7 @@ export default function App() {
           <div>
             <h2 className="text-sm font-extrabold text-slate-900 tracking-tight">
               {activeTab === 'dashboard' && 'Admin Dashboard'}
-              {activeTab === 'intake' && 'Customer Intake & Container Logger (12kg Rule)'}
+              {activeTab === 'intake' && 'Walk-in Customer Intake & Container Logger (12kg Rule)'}
               {activeTab === 'progress' && 'Queue Workflow & Progress Manager'}
               {activeTab === 'pickup' && 'Pickup Verification & Container Matching'}
               {activeTab === 'sales' && 'Sales Analytics & Revenue Reports'}
@@ -753,7 +750,7 @@ export default function App() {
                 Weigh &amp; Tag Order #{weighOrder.order_id}
               </h3>
               <p className="text-xs text-slate-500">
-                Customer: <span className="font-bold text-slate-800">{weighOrder.customer_name}</span>. Enter actual scale weight and container color.
+                Customer: <span className="font-bold text-slate-800">{weighOrder.customer_name}</span>. Enter actual scale weight and container description.
               </p>
               <form onSubmit={handleSaveWeighIn} className="space-y-3.5">
                 <div>
@@ -772,19 +769,16 @@ export default function App() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Physical Container Color
+                    Container Description
                   </label>
-                  <select
-                    value={weighColor}
-                    onChange={(e) => setWeighColor(e.target.value)}
+                  <input
+                    type="text"
+                    required
+                    value={weighDescription}
+                    onChange={(e) => setWeighDescription(e.target.value)}
+                    placeholder="e.g. Blue Laundry Bag"
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
-                  >
-                    <option value="Blue Bag">Blue Bag</option>
-                    <option value="Red Bag">Red Bag</option>
-                    <option value="Green Tote Bag">Green Tote Bag</option>
-                    <option value="Yellow Mesh Basket">Yellow Mesh Basket</option>
-                    <option value="White Laundry Hamper">White Laundry Hamper</option>
-                  </select>
+                  />
                 </div>
                 <div className="flex space-x-2.5 pt-2">
                   <button
@@ -869,7 +863,7 @@ export default function App() {
                 onClick={() => setActiveTab('intake')}
                 className="px-5 py-3 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition shadow-sm"
               >
-                + New Customer Intake
+                + Walk-in Customer Intake
               </button>
             </div>
 
@@ -893,7 +887,7 @@ export default function App() {
                       <th className="py-3.5 px-4">Order ID</th>
                       <th className="py-3.5 px-4">Customer</th>
                       <th className="py-3.5 px-4">Weight</th>
-                      <th className="py-3.5 px-4">Container</th>
+                      <th className="py-3.5 px-4">Container Description</th>
                       <th className="py-3.5 px-4">Payment</th>
                       <th className="py-3.5 px-4">Stage</th>
                       <th className="py-3.5 px-4 text-right">Actions</th>
@@ -974,15 +968,15 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 2: CUSTOMER INTAKE */}
+        {/* TAB 2: WALK-IN CUSTOMER INTAKE */}
         {activeTab === 'intake' && (
           <div className="p-8 max-w-3xl mx-auto w-full">
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8">
               <h3 className="text-base font-extrabold text-slate-900 mb-1">
-                New Customer Intake Form
+                Walk-in Customer Intake Form
               </h3>
               <p className="text-xs text-slate-500 mb-6 font-medium">
-                Enforces the 12 kg maximum batch rule and physical container color identification (synced with mobile tracking).
+                Enforces the 12 kg maximum batch rule and custom physical container description (synced directly with the mobile app tracking screen).
               </p>
 
               <form onSubmit={handleCreateOrder} className="space-y-5">
@@ -1019,7 +1013,7 @@ export default function App() {
                         setSelectedUserId('');
                         setCustomerName(e.target.value);
                       }}
-                      placeholder="e.g. Carim C."
+                      placeholder="e.g. Joshua"
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
                     />
                   </div>
@@ -1032,27 +1026,13 @@ export default function App() {
                       required
                       value={contactNumber}
                       onChange={(e) => setContactNumber(e.target.value)}
-                      placeholder="09187654321"
+                      placeholder="09235876198"
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Service Package
-                    </label>
-                    <select
-                      value={servicePackage}
-                      onChange={(e) => setServicePackage(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
-                    >
-                      <option>Wash • Dry • Fold (₱140)</option>
-                      <option>Wash • Dry (₱110)</option>
-                      <option>Dry Only (₱70)</option>
-                    </select>
-                  </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                       Total Laundry Weight (kg)
@@ -1067,49 +1047,49 @@ export default function App() {
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
                     />
                   </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Container Color
-                    </label>
-                    <select
-                      value={containerColor}
-                      onChange={(e) => setContainerColor(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
-                    >
-                      <option value="Blue Bag">Blue Bag</option>
-                      <option value="Red Bag">Red Bag</option>
-                      <option value="Green Tote Bag">Green Tote Bag</option>
-                      <option value="Yellow Mesh Basket">Yellow Mesh Basket</option>
-                      <option value="White Laundry Hamper">White Laundry Hamper</option>
-                    </select>
-                  </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                       Payment Status
                     </label>
                     <select
-                      value={paymentMethod}
-                      onChange={(e) => setPaymentMethod(e.target.value)}
+                      value={paymentStatus}
+                      onChange={(e) => setPaymentStatus(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
                     >
                       <option value="Unpaid">Unpaid (Pay on Pickup)</option>
                       <option value="Paid">Paid (Cash / GCash)</option>
                     </select>
                   </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Completion Window
+                      Container Description (Typing Box)
                     </label>
                     <input
                       type="text"
                       required
-                      value={targetTime}
-                      onChange={(e) => setTargetTime(e.target.value)}
+                      value={containerDescription}
+                      onChange={(e) => setContainerDescription(e.target.value)}
+                      placeholder="e.g. Green Puregold Tote Bag"
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
                     />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Estimated Target Completion Time
+                    </label>
+                    <select
+                      value={targetCompletionTime}
+                      onChange={(e) => setTargetCompletionTime(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
+                    >
+                      <option>Same Day, 6:00 PM - 8:00 PM</option>
+                      <option>Standard, 24 Hours</option>
+                      <option>Express, 3 Hours</option>
+                      <option>Next Day Morning, 9:00 AM</option>
+                    </select>
                   </div>
                 </div>
 
@@ -1122,7 +1102,7 @@ export default function App() {
 
                   <div className="p-3 bg-white rounded-xl border border-blue-100 flex justify-between items-center text-xs">
                     <span className="font-bold text-slate-800">
-                      Batch 1: {containerColor} ({batch1Weight} kg)
+                      Batch 1: {containerDescription} ({batch1Weight} kg)
                     </span>
                     <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${batch1Weight >= 12 ? 'bg-amber-100 text-amber-800' : 'bg-blue-50 text-[#0f4b81]'}`}>
                       {batch1Weight >= 12 ? 'Max 12kg Limit Reached' : 'Standard Single Load'}
@@ -1132,7 +1112,7 @@ export default function App() {
                   {batch2Weight > 0 && (
                     <div className="p-3 bg-white rounded-xl border border-emerald-200 flex justify-between items-center text-xs">
                       <span className="font-bold text-slate-800">
-                        Batch 2: {containerColor} (Batch 2) ({batch2Weight} kg)
+                        Batch 2: {containerDescription} (Batch 2) ({batch2Weight} kg)
                       </span>
                       <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-bold text-[10px]">
                         Automatic Split (&gt; 12kg Rule)
@@ -1148,7 +1128,7 @@ export default function App() {
                     className="w-full py-4 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition shadow-md flex items-center justify-center space-x-2 disabled:opacity-70"
                   >
                     {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                    <span>{submitting ? 'Syncing with Mobile App...' : 'Log Intake & Sync to Customer App'}</span>
+                    <span>{submitting ? 'Syncing Walk-in Order...' : 'Log Intake & Sync to Customer App'}</span>
                   </button>
                 </div>
               </form>
@@ -1306,7 +1286,7 @@ export default function App() {
                   <div className="p-3.5 bg-white rounded-xl border border-slate-200/80 flex items-center space-x-3 shadow-2xs">
                     <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
                     <div>
-                      <p className="text-xs font-bold text-slate-800">Physical Container Description</p>
+                      <p className="text-xs font-bold text-slate-800">Container Description</p>
                       <p className="text-[11px] text-slate-600 mt-0.5 font-medium">{formatContainerTag(verifiedOrder)}</p>
                     </div>
                   </div>
