@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+ import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard,
   UserPlus,
@@ -11,38 +11,52 @@ import {
   RefreshCw,
   Search,
   CheckCircle2,
+  AlertCircle,
   Shirt,
   ArrowRight,
   Package,
   Clock,
   Star,
   Megaphone,
-  CreditCard,
   Scale,
   Trash2,
   ShieldCheck,
   MapPin,
   Phone,
   Mail,
-  Save
+  Save,
+  Loader2,
+  Lock,
+  User,
+  LogOut
 } from 'lucide-react';
 
 export default function App() {
+  // Authentication State
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return localStorage.getItem('ksc_admin_auth') === 'true';
+  });
+  const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+
   const [activeTab, setActiveTab] = useState('dashboard');
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [toastMessage, setToastMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [toast, setToast] = useState({ message: '', type: 'success' });
 
   // Customer Intake Form State (12kg Batch Split Rule & Physical Container Color)
+  const [selectedUserId, setSelectedUserId] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
   const [servicePackage, setServicePackage] = useState('Wash • Dry • Fold (₱140)');
-  const [weightKg, setWeightKg] = useState('12');
-  const [containerColor, setContainerColor] = useState('Blue Bag');
+  const [weightKg, setWeightKg] = useState('14');
+  const [containerColor, setContainerColor] = useState('Green Tote Bag');
   const [paymentMethod, setPaymentMethod] = useState('Unpaid');
   const [targetTime, setTargetTime] = useState('Same Day, 6:00 PM - 8:00 PM');
 
-  // Weigh-in Modal / Inline State for Mobile Scheduled Orders
+  // Weigh-in Modal State for Mobile Scheduled Orders ("Weight TBD at shop")
   const [weighOrder, setWeighOrder] = useState(null);
   const [weighInput, setWeighInput] = useState('8');
   const [weighColor, setWeighColor] = useState('Blue Bag');
@@ -75,9 +89,9 @@ export default function App() {
 
   const API_BASE = 'https://kscync-backend.onrender.com/api';
 
-  const showToast = (msg) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(''), 4000);
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast({ message: '', type: 'success' }), 5000);
   };
 
   const fetchDashboard = async () => {
@@ -95,10 +109,36 @@ export default function App() {
   };
 
   useEffect(() => {
-    fetchDashboard();
-    const interval = setInterval(fetchDashboard, 5000);
-    return () => clearInterval(interval);
-  }, []);
+    if (isAuthenticated) {
+      fetchDashboard();
+      const interval = setInterval(fetchDashboard, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [isAuthenticated]);
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    setLoginError('');
+    // Credentials verification (Admin / staff access)
+    if (
+      (loginUsername.trim().toLowerCase() === 'admin' ||
+        loginUsername.trim().toLowerCase() === 'staff' ||
+        loginUsername.trim().toLowerCase() === 'kendrick') &&
+      loginPassword.trim() === 'kscync123'
+    ) {
+      setIsAuthenticated(true);
+      localStorage.setItem('ksc_admin_auth', 'true');
+      showToast('Welcome to KSCync Web Admin Portal');
+    } else {
+      setLoginError('Invalid username or password. (Hint: admin / kscync123)');
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    localStorage.removeItem('ksc_admin_auth');
+    showToast('Logged out successfully.');
+  };
 
   // 12kg Maximum Batch Rule Calculator (Matches Mobile App Batch 1 / Batch 2 Physical Identification)
   const parsedWeight = parseFloat(weightKg) || 0;
@@ -118,6 +158,18 @@ export default function App() {
     'Picked Up',
     'Completed'
   ];
+
+  const handleSelectExistingUser = (userId) => {
+    setSelectedUserId(userId);
+    if (!userId) return;
+    const foundUser = (dashboardData?.users || []).find(
+      (u) => String(u.user_id) === String(userId)
+    );
+    if (foundUser) {
+      setCustomerName(foundUser.full_name || '');
+      setContactNumber(foundUser.phone_number || '');
+    }
+  };
 
   const handleAdvanceStage = async (orderId, currentStatus) => {
     const normalizedCurrent = (currentStatus || '').trim().toLowerCase();
@@ -140,40 +192,44 @@ export default function App() {
       if (res.ok) {
         showToast(`Order #${orderId} updated to "${nextStatus}" (Synced to Mobile App)`);
         fetchDashboard();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        showToast(errData.error || 'Failed to advance order stage.', 'error');
       }
     } catch (err) {
-      console.error('Error updating status:', err);
+      showToast('Network error connecting to Render backend.', 'error');
     }
   };
 
   const handleUpdatePayment = async (orderId, nextPaymentStatus) => {
     try {
-      const res = await fetch(`${API_BASE}/orders/${orderId}/payment`, {
+      let res = await fetch(`${API_BASE}/orders/${orderId}/payment`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ payment_status: nextPaymentStatus })
       });
-      if (res.ok) {
-        showToast(`Order #${orderId} payment marked as ${nextPaymentStatus}`);
-        fetchDashboard();
-      } else {
-        // Fallback if backend uses general order update route
-        await fetch(`${API_BASE}/orders/${orderId}`, {
+      if (!res.ok) {
+        res = await fetch(`${API_BASE}/orders/${orderId}/status`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ payment_status: nextPaymentStatus })
         });
-        showToast(`Order #${orderId} payment status updated`);
+      }
+      if (res.ok) {
+        showToast(`Order #${orderId} payment marked as ${nextPaymentStatus}`);
         fetchDashboard();
+      } else {
+        showToast('Could not update payment status on server.', 'error');
       }
     } catch (err) {
-      console.error('Error updating payment:', err);
+      showToast('Network error updating payment status.', 'error');
     }
   };
 
   const handleSaveWeighIn = async (e) => {
     e.preventDefault();
     if (!weighOrder) return;
+    setSubmitting(true);
     const w = parseFloat(weighInput) || 0;
     const b1 = Math.min(w, 12);
     const b2 = w > 12 ? Number((w - 12).toFixed(2)) : 0;
@@ -188,7 +244,7 @@ export default function App() {
     }
 
     try {
-      const res = await fetch(`${API_BASE}/orders/${weighOrder.order_id}/weigh`, {
+      let res = await fetch(`${API_BASE}/orders/${weighOrder.order_id}/weigh`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -198,73 +254,135 @@ export default function App() {
         })
       });
       if (!res.ok) {
-        // Fallback to status update if dedicated weigh endpoint is not present
-        await fetch(`${API_BASE}/orders/${weighOrder.order_id}/status`, {
+        res = await fetch(`${API_BASE}/orders/${weighOrder.order_id}/status`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'Received at Shop', total_weight_kg: w, containers })
+          body: JSON.stringify({
+            status: 'Received at Shop',
+            total_weight_kg: w,
+            containers
+          })
         });
       }
-      showToast(`Order #${weighOrder.order_id} weighed (${w} kg) & assigned to ${weighColor}`);
-      setWeighOrder(null);
-      fetchDashboard();
+      if (res.ok) {
+        showToast(`Order #${weighOrder.order_id} weighed (${w} kg) & assigned to ${weighColor}`);
+        setWeighOrder(null);
+        fetchDashboard();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        showToast(errData.error || 'Failed to save weigh-in.', 'error');
+      }
     } catch (err) {
-      console.error('Error saving weigh-in:', err);
+      showToast('Network error saving weigh-in.', 'error');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleCreateOrder = async (e) => {
     e.preventDefault();
-    const containers = [
-      {
-        basket_number: 1,
-        color: containerColor,
-        assigned_weight_kg: batch1Weight
-      }
-    ];
-
-    if (batch2Weight > 0) {
-      containers.push({
-        basket_number: 2,
-        color: `${containerColor} (Batch 2)`,
-        assigned_weight_kg: batch2Weight
-      });
+    if (!customerName.trim()) {
+      showToast('Please enter the customer name.', 'error');
+      return;
     }
+    setSubmitting(true);
 
     try {
+      let resolvedUserId = selectedUserId ? Number(selectedUserId) : null;
+      const existingUsers = dashboardData?.users || [];
+
+      if (!resolvedUserId) {
+        const matchedUser = existingUsers.find(
+          (u) =>
+            (u.full_name || '').trim().toLowerCase() === customerName.trim().toLowerCase() ||
+            (contactNumber.trim() && u.phone_number === contactNumber.trim())
+        );
+        if (matchedUser) {
+          resolvedUserId = matchedUser.user_id;
+        } else {
+          const regRes = await fetch(`${API_BASE}/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              full_name: customerName.trim(),
+              phone_number: contactNumber.trim() || '09000000000',
+              email: `${customerName.trim().toLowerCase().replace(/[^a-z0-9]/g, '')}${Date.now().toString().slice(-3)}@kscync.local`,
+              password: 'kscync123',
+              role: 'customer'
+            })
+          });
+          if (regRes.ok) {
+            const regData = await regRes.json();
+            resolvedUserId = regData.user?.user_id || regData.user_id || null;
+          }
+        }
+      }
+
+      const containers = [
+        {
+          basket_number: 1,
+          color: containerColor,
+          assigned_weight_kg: batch1Weight
+        }
+      ];
+
+      if (batch2Weight > 0) {
+        containers.push({
+          basket_number: 2,
+          color: `${containerColor} (Batch 2)`,
+          assigned_weight_kg: batch2Weight
+        });
+      }
+
       const res = await fetch(`${API_BASE}/orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          user_id: resolvedUserId,
           customer_name: customerName.trim(),
           phone_number: contactNumber.trim(),
           service_package: servicePackage,
           total_weight_kg: parsedWeight,
+          estimated_weight: parsedWeight,
+          container_description: containerColor,
           target_completion_time: targetTime,
           payment_status: paymentMethod,
           status: 'Received at Shop',
           containers
         })
       });
+
+      const data = await res.json().catch(() => ({}));
+
       if (res.ok) {
         showToast(
           batch2Weight > 0
             ? `Order logged! Split into Batch 1 (${batch1Weight}kg) & Batch 2 (${batch2Weight}kg).`
-            : `Order logged under ${containerColor} (${batch1Weight}kg) & synced with mobile app!`
+            : `Order logged under ${containerColor} (${batch1Weight}kg) and synced to Mobile App!`
         );
+        setSelectedUserId('');
         setCustomerName('');
         setContactNumber('');
-        fetchDashboard();
+        await fetchDashboard();
         setActiveTab('dashboard');
+      } else {
+        showToast(data.error || data.message || 'Server error logging order.', 'error');
       }
     } catch (err) {
-      console.error('Error creating order:', err);
+      showToast('Connection error: Render backend may be waking up. Try again.', 'error');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handlePostAnnouncement = async (e) => {
     e.preventDefault();
-    if (!announcementTitle.trim() || !announcementMessage.trim()) return;
+    if (!announcementTitle.trim() || !announcementMessage.trim()) {
+      showToast('Please enter both title and message.', 'error');
+      return;
+    }
+    setSubmitting(true);
+
     try {
       const res = await fetch(`${API_BASE}/announcements`, {
         method: 'POST',
@@ -272,17 +390,25 @@ export default function App() {
         body: JSON.stringify({
           title: announcementTitle.trim(),
           message: announcementMessage.trim(),
+          content: announcementMessage.trim(),
           is_active: true
         })
       });
+
+      const data = await res.json().catch(() => ({}));
+
       if (res.ok) {
         showToast('Announcement published live to Customer Mobile App!');
         setAnnouncementTitle('');
         setAnnouncementMessage('');
-        fetchDashboard();
+        await fetchDashboard();
+      } else {
+        showToast(data.error || data.message || 'Failed to publish announcement.', 'error');
       }
     } catch (err) {
-      console.error('Error posting announcement:', err);
+      showToast('Network error publishing announcement.', 'error');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -294,11 +420,94 @@ export default function App() {
       if (res.ok) {
         showToast('Announcement removed from Mobile App');
         fetchDashboard();
+      } else {
+        showToast('Unable to delete announcement.', 'error');
       }
     } catch (err) {
-      console.error('Error deleting announcement:', err);
+      showToast('Network error deleting announcement.', 'error');
     }
   };
+
+  // If not authenticated, render the secure Login Screen
+  if (!isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-[#0f4b81] font-sans">
+        <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full space-y-6 mx-4">
+          <div className="text-center space-y-2">
+            <div className="inline-flex bg-[#0f4b81]/10 p-3.5 rounded-2xl">
+              <Shirt className="text-[#0f4b81] w-8 h-8" />
+            </div>
+            <h1 className="text-2xl font-black text-gray-900 tracking-tight">KSCync Admin Portal</h1>
+            <p className="text-xs text-gray-500">
+              KSC Laundry Shop • Real-Time Management &amp; Mobile App Sync
+            </p>
+          </div>
+
+          {loginError && (
+            <div className="p-3.5 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-bold flex items-center space-x-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{loginError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1">
+                Username / Role
+              </label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                  <User className="w-4 h-4" />
+                </span>
+                <input
+                  type="text"
+                  required
+                  value={loginUsername}
+                  onChange={(e) => setLoginUsername(e.target.value)}
+                  placeholder="admin or staff"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 text-xs text-gray-900 focus:outline-none focus:border-[#0f4b81]"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1">
+                Password
+              </label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                  <Lock className="w-4 h-4" />
+                </span>
+                <input
+                  type="password"
+                  required
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 text-xs text-gray-900 focus:outline-none focus:border-[#0f4b81]"
+                />
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="submit"
+                className="w-full py-3.5 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition shadow-md"
+              >
+                Sign In to Admin Hub
+              </button>
+            </div>
+
+            <div className="text-center pt-2">
+              <p className="text-[11px] text-gray-400">
+                Default credentials: <span className="font-bold text-gray-600">admin</span> / <span className="font-bold text-gray-600">kscync123</span>
+              </p>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   const orders = dashboardData?.orders || [];
   const activeOrders = orders.filter((o) => {
@@ -311,7 +520,6 @@ export default function App() {
     return st === 'completed' || st === 'picked up';
   });
 
-  // Live Sales & Volume Calculations
   const totalProcessedKg = orders.reduce(
     (sum, o) => sum + (parseFloat(o.total_weight_kg) || 0),
     0
@@ -322,13 +530,11 @@ export default function App() {
     return sum + (w > 0 ? batches * 140 : 140);
   }, 0);
 
-  // Aligned with HomeScreen.js (maxMachines = 8)
   const rawActiveBaskets = dashboardData?.capacity?.activeBaskets ?? activeOrders.length;
   const activeMachinesCount = Math.min(rawActiveBaskets, shopCapacityLimit);
   const capacityPercent = (activeMachinesCount / shopCapacityLimit) * 100;
   const isTight = capacityPercent >= 75;
 
-  // Dynamic Overhead Per Kilo Formula
   const totalUtilityExpense =
     (Number(waterCost) || 0) + (Number(electricityCost) || 0) + (Number(suppliesCost) || 0);
   const overheadPerKg =
@@ -340,7 +546,7 @@ export default function App() {
         .map((c) => `Batch ${c.basket_number}: ${c.color} (${c.assigned_weight_kg}kg)`)
         .join(' • ');
     }
-    return 'Awaiting Shop Weigh-in';
+    return order.container_description || 'Weight TBD at shop';
   };
 
   const renderStatusBadge = (status) => {
@@ -371,13 +577,15 @@ export default function App() {
       {/* SIDEBAR NAVIGATION */}
       <aside className="w-64 bg-[#0f4b81] text-white flex flex-col justify-between shadow-lg shrink-0">
         <div>
-          <div className="p-5 border-b border-white/10 flex items-center space-x-3">
-            <div className="bg-white/15 p-2.5 rounded-xl">
-              <Shirt className="text-white w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="font-black text-base tracking-wide text-white">KSCync</h1>
-              <p className="text-[11px] text-blue-200">Web Admin &amp; Staff Hub</p>
+          <div className="p-5 border-b border-white/10 flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="bg-white/15 p-2.5 rounded-xl">
+                <Shirt className="text-white w-6 h-6" />
+              </div>
+              <div>
+                <h1 className="font-black text-base tracking-wide text-white">KSCync</h1>
+                <p className="text-[11px] text-blue-200">Web Admin &amp; Staff Hub</p>
+              </div>
             </div>
           </div>
 
@@ -403,24 +611,33 @@ export default function App() {
           </nav>
         </div>
 
-        {/* Clickable Sidebar Profile Footer */}
-        <button
-          onClick={() => setActiveTab('profile')}
-          className="p-4 border-t border-white/10 flex items-center space-x-3 bg-black/15 hover:bg-black/25 transition text-left w-full"
-        >
-          <div className="w-9 h-9 rounded-full bg-white text-[#0f4b81] font-black flex items-center justify-center text-xs shrink-0">
-            {adminProfile.fullName
-              .split(' ')
-              .map((n) => n[0])
-              .join('')
-              .substring(0, 2)
-              .toUpperCase()}
-          </div>
-          <div className="overflow-hidden">
-            <p className="text-xs font-bold truncate text-white">{adminProfile.fullName}</p>
-            <p className="text-[10px] text-blue-200 truncate">{adminProfile.shopName}</p>
-          </div>
-        </button>
+        {/* Sidebar Footer with Profile & Logout */}
+        <div className="p-4 border-t border-white/10 bg-black/15 space-y-2">
+          <button
+            onClick={() => setActiveTab('profile')}
+            className="flex items-center space-x-3 text-left w-full hover:opacity-80 transition"
+          >
+            <div className="w-9 h-9 rounded-full bg-white text-[#0f4b81] font-black flex items-center justify-center text-xs shrink-0">
+              {adminProfile.fullName
+                .split(' ')
+                .map((n) => n[0])
+                .join('')
+                .substring(0, 2)
+                .toUpperCase()}
+            </div>
+            <div className="overflow-hidden flex-1">
+              <p className="text-xs font-bold truncate text-white">{adminProfile.fullName}</p>
+              <p className="text-[10px] text-blue-200 truncate">{adminProfile.shopName}</p>
+            </div>
+          </button>
+          <button
+            onClick={handleLogout}
+            className="w-full py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-200 rounded-lg text-[11px] font-bold flex items-center justify-center space-x-1.5 transition"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Sign Out</span>
+          </button>
+        </div>
       </aside>
 
       {/* MAIN CONTENT AREA */}
@@ -472,13 +689,26 @@ export default function App() {
         </header>
 
         {/* GLOBAL LIVE SYNC TOAST */}
-        {toastMessage && (
-          <div className="mx-8 mt-4 bg-[#0f4b81] text-white px-4 py-3 rounded-xl shadow-md flex items-center justify-between text-xs font-bold">
+        {toast.message && (
+          <div
+            className={`mx-8 mt-4 px-4 py-3 rounded-xl shadow-md flex items-center justify-between text-xs font-bold ${
+              toast.type === 'error'
+                ? 'bg-red-600 text-white'
+                : 'bg-[#0f4b81] text-white'
+            }`}
+          >
             <div className="flex items-center space-x-2">
-              <CheckCircle2 className="w-4 h-4 text-green-300" />
-              <span>{toastMessage}</span>
+              {toast.type === 'error' ? (
+                <AlertCircle className="w-4 h-4 text-red-200 shrink-0" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4 text-green-300 shrink-0" />
+              )}
+              <span>{toast.message}</span>
             </div>
-            <button onClick={() => setToastMessage('')} className="text-blue-200 hover:text-white">
+            <button
+              onClick={() => setToast({ message: '', type: 'success' })}
+              className="text-white/80 hover:text-white ml-4"
+            >
               Dismiss
             </button>
           </div>
@@ -492,7 +722,8 @@ export default function App() {
                 Weigh &amp; Tag Mobile Order #{weighOrder.order_id}
               </h3>
               <p className="text-xs text-gray-500">
-                Customer: <span className="font-bold text-gray-800">{weighOrder.customer_name}</span>. Enter actual shop scale weight and physical container color.
+                Customer:{' '}
+                <span className="font-bold text-gray-800">{weighOrder.customer_name}</span>. Enter actual shop scale weight and physical container color.
               </p>
               <form onSubmit={handleSaveWeighIn} className="space-y-3">
                 <div>
@@ -535,9 +766,11 @@ export default function App() {
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 py-2.5 bg-[#0f4b81] text-white rounded-xl font-bold text-xs"
+                    disabled={submitting}
+                    className="flex-1 py-2.5 bg-[#0f4b81] text-white rounded-xl font-bold text-xs flex items-center justify-center space-x-1"
                   >
-                    Save &amp; Receive at Shop
+                    {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    <span>Save &amp; Receive at Shop</span>
                   </button>
                 </div>
               </form>
@@ -736,7 +969,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 2: CUSTOMER INTAKE (12KG BATCH SPLIT RULE & CONTAINER MARKING) */}
+        {/* TAB 2: CUSTOMER INTAKE */}
         {activeTab === 'intake' && (
           <div className="p-8 max-w-3xl mx-auto w-full">
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
@@ -748,6 +981,26 @@ export default function App() {
               </p>
 
               <form onSubmit={handleCreateOrder} className="space-y-4">
+                {(dashboardData?.users || []).length > 0 && (
+                  <div className="p-3.5 bg-blue-50/50 border border-blue-100 rounded-xl">
+                    <label className="block text-[11px] font-bold text-[#0f4b81] mb-1">
+                      Link to Registered Mobile App Customer (Optional)
+                    </label>
+                    <select
+                      value={selectedUserId}
+                      onChange={(e) => handleSelectExistingUser(e.target.value)}
+                      className="w-full bg-white border border-blue-200 rounded-lg p-2.5 text-xs text-gray-900 focus:outline-none"
+                    >
+                      <option value="">-- New Walk-in / Auto-Create Account --</option>
+                      {(dashboardData?.users || []).map((u) => (
+                        <option key={u.user_id} value={u.user_id}>
+                          {u.full_name} ({u.phone_number})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-gray-700 mb-1">
@@ -757,8 +1010,11 @@ export default function App() {
                       type="text"
                       required
                       value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      placeholder="e.g. Carim C."
+                      onChange={(e) => {
+                        setSelectedUserId('');
+                        setCustomerName(e.target.value);
+                      }}
+                      placeholder="e.g. Carim C. or Joshua"
                       className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-900 focus:outline-none focus:border-[#0f4b81]"
                     />
                   </div>
@@ -891,9 +1147,15 @@ export default function App() {
                 <div className="pt-4">
                   <button
                     type="submit"
-                    className="w-full py-3.5 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition shadow-md"
+                    disabled={submitting}
+                    className="w-full py-3.5 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition shadow-md flex items-center justify-center space-x-2 disabled:opacity-60"
                   >
-                    Log Intake &amp; Sync to Customer App
+                    {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                    <span>
+                      {submitting
+                        ? 'Syncing Intake with Cloud & Mobile App...'
+                        : 'Log Intake & Sync to Customer App'}
+                    </span>
                   </button>
                 </div>
               </form>
@@ -901,7 +1163,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 3: PROGRESS MANAGER (KANBAN WORKFLOW) */}
+        {/* TAB 3: PROGRESS MANAGER */}
         {activeTab === 'progress' && (
           <div className="p-8 flex-1 overflow-x-auto">
             <div className="grid grid-cols-6 gap-4 min-w-[1250px]">
@@ -1174,9 +1436,7 @@ export default function App() {
                   </span>
                 </div>
                 <div className="p-5 bg-gray-50 rounded-2xl border border-gray-100">
-                  <p className="text-xs text-gray-500 font-semibold">
-                    Completed Orders
-                  </p>
+                  <p className="text-xs text-gray-500 font-semibold">Completed Orders</p>
                   <p className="text-2xl font-black text-gray-900 mt-1">
                     {completedOrders.length}
                   </p>
@@ -1218,7 +1478,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 6: UTILITY ANALYTICS (INTERACTIVE ₱13.50/KG OVERHEAD CALCULATOR) */}
+        {/* TAB 6: UTILITY ANALYTICS */}
         {activeTab === 'utility' && (
           <div className="p-8 max-w-4xl mx-auto w-full space-y-6">
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 space-y-6">
@@ -1309,7 +1569,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 7: SETTINGS, ANNOUNCEMENTS & RBAC */}
+        {/* TAB 7: SETTINGS & ANNOUNCEMENTS */}
         {activeTab === 'settings' && (
           <div className="p-8 max-w-3xl mx-auto w-full space-y-6">
             {/* Live Shop Announcement Broadcaster */}
@@ -1345,9 +1605,15 @@ export default function App() {
                 />
                 <button
                   type="submit"
-                  className="px-5 py-2.5 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition"
+                  disabled={submitting}
+                  className="px-5 py-2.5 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition flex items-center space-x-2 disabled:opacity-60"
                 >
-                  Publish Announcement to Mobile App
+                  {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>
+                    {submitting
+                      ? 'Publishing to Mobile App...'
+                      : 'Publish Announcement to Mobile App'}
+                  </span>
                 </button>
               </form>
 
@@ -1361,7 +1627,9 @@ export default function App() {
                   >
                     <div>
                       <p className="text-xs font-bold text-gray-900">{item.title}</p>
-                      <p className="text-[11px] text-gray-600 mt-0.5">{item.message}</p>
+                      <p className="text-[11px] text-gray-600 mt-0.5">
+                        {item.message || item.content}
+                      </p>
                     </div>
                     <button
                       onClick={() => handleDeleteAnnouncement(item.announcement_id)}
@@ -1445,7 +1713,6 @@ export default function App() {
         {/* TAB 8: ADMIN PROFILE PAGE */}
         {activeTab === 'profile' && (
           <div className="p-8 max-w-4xl mx-auto w-full space-y-6">
-            {/* Profile Header Card */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 flex flex-wrap items-center justify-between gap-6">
               <div className="flex items-center space-x-5">
                 <div className="w-20 h-20 rounded-full bg-[#0f4b81] text-white font-black text-2xl flex items-center justify-center shadow-md">
@@ -1485,7 +1752,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Editable Shop & Admin Information */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 space-y-4">
               <h4 className="text-sm font-bold text-gray-900">
                 Shop &amp; Account Details
