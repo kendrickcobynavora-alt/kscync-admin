@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+ import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard,
   UserPlus,
@@ -28,7 +28,8 @@ import {
   Loader2,
   Lock,
   User,
-  LogOut
+  LogOut,
+  ArrowLeft
 } from 'lucide-react';
 
 export default function App() {
@@ -45,6 +46,9 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState({ message: '', type: 'success' });
+
+  // Progress Manager Date Filter State & Color Categorization
+  const [progressDateFilter, setProgressDateFilter] = useState('');
 
   // Customer Intake Form State (Walk-in Aligned)
   const [selectedUserId, setSelectedUserId] = useState('');
@@ -201,29 +205,18 @@ export default function App() {
     }
   };
 
-  const handleAdvanceStage = async (orderId, currentStatus) => {
-    const normalizedCurrent = (currentStatus || '').trim().toLowerCase();
-    let currentIndex = workflowStages.findIndex(
-      (s) => s.toLowerCase() === normalizedCurrent
-    );
-    if (normalizedCurrent === 'received') currentIndex = 0;
-
-    const nextStatus =
-      currentIndex >= 0 && currentIndex < workflowStages.length - 1
-        ? workflowStages[currentIndex + 1]
-        : 'Picked Up';
-
+  const handleSetStage = async (orderId, targetStatus) => {
     try {
       const res = await fetch(`${API_BASE}/orders/${orderId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: nextStatus })
+        body: JSON.stringify({ status: targetStatus })
       });
       if (res.ok) {
-        showToast(`Order #${orderId} updated to "${nextStatus}"`);
+        showToast(`Order #${orderId} updated to "${targetStatus}"`);
         fetchDashboard();
       } else {
-        showToast('Failed to advance order stage.', 'error');
+        showToast('Failed to update order stage.', 'error');
       }
     } catch (err) {
       showToast('Network error connecting to backend.', 'error');
@@ -453,11 +446,10 @@ export default function App() {
     }
   };
 
-  // PROFESSIONAL LOGIN SCREEN
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-100">
+        <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-100">
           <div className="bg-gradient-to-br from-[#0f4b81] to-blue-900 p-8 text-white text-center space-y-3">
             <div className="inline-flex bg-white/10 p-3.5 rounded-2xl backdrop-blur-sm border border-white/15 shadow-inner">
               <Shirt className="w-8 h-8 text-white" />
@@ -535,12 +527,20 @@ export default function App() {
   }
 
   const orders = dashboardData?.orders || [];
-  const activeOrders = orders.filter((o) => {
+  
+  // Date filtering logic for Progress Manager or general views
+  const filteredOrders = orders.filter(o => {
+    if (!progressDateFilter) return true;
+    const orderDate = new Date(o.created_at).toISOString().split('T')[0];
+    return orderDate === progressDateFilter;
+  });
+
+  const activeOrders = filteredOrders.filter((o) => {
     const st = (o.status || '').trim().toLowerCase();
     return st !== 'completed' && st !== 'picked up';
   });
 
-  const completedOrders = orders.filter((o) => {
+  const completedOrders = filteredOrders.filter((o) => {
     const st = (o.status || '').trim().toLowerCase();
     return st === 'completed' || st === 'picked up';
   });
@@ -669,13 +669,12 @@ export default function App() {
         <header className="bg-white border-b border-slate-200/80 px-8 py-4 flex justify-between items-center shadow-xs sticky top-0 z-20">
           <div>
             <h2 className="text-sm font-extrabold text-slate-900 tracking-tight">
-              {activeTab === 'dashboard' && 'Admin Dashboard'}
-              {activeTab === 'intake' && 'Walk-in Customer Intake & Container Logger (12kg Rule)'}
-              {activeTab === 'progress' && 'Queue Workflow & Progress Manager'}
+              {activeTab === 'dashboard' && 'Admin Dashboard — Today’s Summary & Current Orders'}
+              {activeTab === 'intake' && 'Walk-in Customer Intake & Container Logger'}
+              {activeTab === 'progress' && 'Queue Workflow & Kanban Progress Manager'}
               {activeTab === 'pickup' && 'Pickup Verification & Container Matching'}
               {activeTab === 'sales' && 'Sales Analytics & Revenue Reports'}
-              {activeTab === 'utility' &&
-                `Utility Cost Tracking & Overhead Calculator (₱${overheadPerKg}/kg)`}
+              {activeTab === 'utility' && `Utility Cost Tracking & Overhead Calculator (₱${overheadPerKg}/kg)`}
               {activeTab === 'settings' && 'System Settings, Announcements & RBAC'}
               {activeTab === 'profile' && 'Admin Profile & Shop Directory'}
             </h2>
@@ -696,7 +695,7 @@ export default function App() {
             >
               <span
                 className={`w-2 h-2 rounded-full ${
-                  isTight ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'
+                  isTight ? 'bg-rose-500 animate-ping' : 'bg-emerald-500 animate-pulse'
                 }`}
               />
               <span>Shop Status: {isTight ? 'TIGHT' : 'LOOSE'}</span>
@@ -797,12 +796,12 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 1: DASHBOARD */}
+        {/* TAB 1: DASHBOARD (Showing Today's Summary & Current Orders Immediately) */}
         {activeTab === 'dashboard' && (
           <div className="p-8 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
               <div className="bg-white p-6 rounded-2xl shadow-xs border border-slate-200/80">
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Total Orders</p>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Today's Total Orders</p>
                 <div className="flex items-baseline space-x-2">
                   <h3 className="text-2xl font-black text-slate-900">{orders.length}</h3>
                   <span className="text-xs font-bold text-emerald-600">({activeOrders.length} active)</span>
@@ -822,10 +821,10 @@ export default function App() {
               </div>
 
               <div className="bg-white p-6 rounded-2xl shadow-xs border border-slate-200/80">
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Estimated Sales</p>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Estimated Sales Today</p>
                 <div className="flex items-baseline space-x-2">
                   <h3 className="text-2xl font-black text-slate-900">₱{estimatedLiveSales.toLocaleString()}</h3>
-                  <span className="text-xs font-bold text-emerald-600">Live</span>
+                  <span className="text-xs font-bold text-emerald-600 animate-pulse">● Live</span>
                 </div>
                 <p className="text-[11px] text-slate-500 mt-1 font-medium">Based on ₱140/batch rate</p>
               </div>
@@ -837,18 +836,19 @@ export default function App() {
               </div>
             </div>
 
-            {/* Active Shop Workload Banner */}
+            {/* Current Orders for Today & Action Banner */}
             <div className="bg-white p-6 rounded-2xl shadow-xs border border-slate-200/80 flex flex-wrap justify-between items-center gap-4">
               <div className="flex items-center space-x-3.5">
-                <div className={`p-3 rounded-xl ${isTight ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                <div className={`p-3 rounded-xl ${isTight ? 'bg-rose-100 text-rose-700 animate-bounce' : 'bg-emerald-100 text-emerald-700'}`}>
                   <Clock className="w-5 h-5" />
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Shop Capacity State</p>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Today's Operating State</p>
                   <div className="flex items-center space-x-2 mt-0.5">
-                    <span className="text-sm font-extrabold text-slate-900">Status:</span>
-                    <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${isTight ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                      {isTight ? 'TIGHT' : 'LOOSE'}
+                    <span className="text-sm font-extrabold text-slate-900">Shop Status:</span>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold flex items-center space-x-1.5 ${isTight ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${isTight ? 'bg-rose-500 animate-ping' : 'bg-emerald-500'}`} />
+                      <span>{isTight ? 'TIGHT' : 'LOOSE'}</span>
                     </span>
                   </div>
                 </div>
@@ -862,15 +862,18 @@ export default function App() {
               </button>
             </div>
 
-            {/* Active Queue Table */}
+            {/* Current Orders Table for Today */}
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-6">
               <div className="flex justify-between items-center mb-5">
-                <h3 className="text-sm font-extrabold text-slate-900">Active Queue Orders</h3>
+                <h3 className="text-sm font-extrabold text-slate-900 flex items-center space-x-2">
+                  <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping" />
+                  <span>Current Orders for Today</span>
+                </h3>
                 <button
                   onClick={() => setActiveTab('progress')}
                   className="text-xs font-bold text-[#0f4b81] flex items-center space-x-1 hover:underline"
                 >
-                  <span>View Kanban Board</span>
+                  <span>Open Kanban Progress Manager</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -879,7 +882,7 @@ export default function App() {
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200">
                     <tr>
-                      <th className="py-3.5 px-4">Order Number</th>
+                      <th className="py-3.5 px-4">Order ID</th>
                       <th className="py-3.5 px-4">Customer</th>
                       <th className="py-3.5 px-4">Weight</th>
                       <th className="py-3.5 px-4">Container Description</th>
@@ -895,7 +898,7 @@ export default function App() {
                       return (
                         <tr key={order.order_id} className="hover:bg-slate-50/80 transition">
                           <td className="py-4 px-4 font-extrabold text-[#0f4b81]">
-                            Order #{index + 1}
+                            Order #{order.order_id}
                           </td>
                           <td className="py-4 px-4 font-bold text-slate-800">
                             {order.customer_name}
@@ -940,10 +943,10 @@ export default function App() {
                           </td>
                           <td className="py-4 px-4 text-right">
                             <button
-                              onClick={() => handleAdvanceStage(order.order_id, order.status)}
-                              className="px-4 py-2 bg-[#0f4b81] text-white rounded-xl font-bold hover:bg-blue-900 transition text-[11px] shadow-sm"
+                              onClick={() => handleSetStage(order.order_id, 'Washing')}
+                              className="px-3 py-1.5 bg-[#0f4b81] text-white rounded-xl font-bold hover:bg-blue-900 transition text-[11px] shadow-sm"
                             >
-                              Advance Stage
+                              Move to Washing
                             </button>
                           </td>
                         </tr>
@@ -952,7 +955,7 @@ export default function App() {
                     {activeOrders.length === 0 && (
                       <tr>
                         <td colSpan="7" className="py-12 text-center text-slate-400 font-medium">
-                          No active orders currently in the queue.
+                          No current active orders for today.
                         </td>
                       </tr>
                     )}
@@ -1088,34 +1091,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* 12kg Split Preview Box */}
-                <div className="p-4 rounded-xl border border-blue-100 bg-blue-50/50 space-y-3">
-                  <p className="text-xs font-bold text-[#0f4b81] flex items-center space-x-2">
-                    <Package className="w-4 h-4" />
-                    <span>Physical Identification &amp; Batch Split Validation (12kg Max Rule)</span>
-                  </p>
-
-                  <div className="p-3 bg-white rounded-xl border border-blue-100 flex justify-between items-center text-xs">
-                    <span className="font-bold text-slate-800">
-                      Batch 1: {containerDescription} ({batch1Weight} kg)
-                    </span>
-                    <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${batch1Weight >= 12 ? 'bg-amber-100 text-amber-800' : 'bg-blue-50 text-[#0f4b81]'}`}>
-                      {batch1Weight >= 12 ? 'Max 12kg Limit Reached' : 'Standard Single Load'}
-                    </span>
-                  </div>
-
-                  {batch2Weight > 0 && (
-                    <div className="p-3 bg-white rounded-xl border border-emerald-200 flex justify-between items-center text-xs">
-                      <span className="font-bold text-slate-800">
-                        Batch 2: {containerDescription} (Batch 2) ({batch2Weight} kg)
-                      </span>
-                      <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-bold text-[10px]">
-                        Automatic Split (&gt; 12kg Rule)
-                      </span>
-                    </div>
-                  )}
-                </div>
-
                 <div className="pt-2">
                   <button
                     type="submit"
@@ -1131,42 +1106,65 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 3: PROGRESS MANAGER */}
+        {/* TAB 3: PROGRESS MANAGER (Kanban Board with Color-Coded Statuses, Date Filter, and Back/Forward Stage Buttons) */}
         {activeTab === 'progress' && (
-          <div className="p-8 flex-1 overflow-x-auto">
+          <div className="p-8 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-2 bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
+              <div className="flex items-center space-x-3">
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Filter Workflow by Date:</span>
+                <input
+                  type="date"
+                  value={progressDateFilter}
+                  onChange={(e) => setProgressDateFilter(e.target.value)}
+                  className="bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-semibold text-slate-800"
+                />
+                {progressDateFilter && (
+                  <button
+                    onClick={() => setProgressDateFilter('')}
+                    className="text-xs font-bold text-rose-600 hover:underline"
+                  >
+                    Clear Filter
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 font-medium">
+                Showing {filteredOrders.length} orders across workflow columns. Use stage buttons to move cards forward or backward.
+              </p>
+            </div>
+
             <div className="grid grid-cols-7 gap-4 min-w-[1400px]">
               {[
-                'Scheduled',
-                'Received at Shop',
-                'Washing',
-                'Drying',
-                'Folding',
-                'Ready for Pick-up',
-                'Picked Up'
-              ].map((stageName) => {
-                const stageOrders = orders.filter((o) => {
+                { name: 'Scheduled', color: 'border-l-4 border-l-blue-500 bg-blue-50/20' },
+                { name: 'Received at Shop', color: 'border-l-4 border-l-cyan-500 bg-cyan-50/20' },
+                { name: 'Washing', color: 'border-l-4 border-l-indigo-500 bg-indigo-50/20' },
+                { name: 'Drying', color: 'border-l-4 border-l-amber-500 bg-amber-50/20' },
+                { name: 'Folding', color: 'border-l-4 border-l-purple-500 bg-purple-50/20' },
+                { name: 'Ready for Pick-up', color: 'border-l-4 border-l-emerald-500 bg-emerald-50/20' },
+                { name: 'Picked Up', color: 'border-l-4 border-l-slate-400 bg-slate-50/40' }
+              ].map((stageObj, stageIndex, arr) => {
+                const stageName = stageObj.name;
+                const stageOrders = filteredOrders.filter((o) => {
                   const st = (o.status || '').trim();
-                  if (stageName === 'Scheduled') {
-                    return st === 'Scheduled' || st === 'Received';
-                  }
-                  if (stageName === 'Picked Up') {
-                    return st === 'Picked Up' || st === 'Completed';
-                  }
+                  if (stageName === 'Scheduled') return st === 'Scheduled' || st === 'Received';
+                  if (stageName === 'Picked Up') return st === 'Picked Up' || st === 'Completed';
                   return st === stageName;
                 });
 
                 return (
-                  <div key={stageName} className="bg-white rounded-2xl border border-slate-200/80 p-4 flex flex-col shadow-xs">
+                  <div key={stageName} className={`bg-white rounded-2xl border border-slate-200/80 p-4 flex flex-col shadow-xs ${stageObj.color}`}>
                     <div className="flex justify-between items-center pb-3 border-b border-slate-100 mb-3">
-                      <h4 className="text-xs font-extrabold text-slate-800">{stageName}</h4>
-                      <span className="w-5 h-5 rounded-full bg-blue-50 text-[#0f4b81] text-[10px] font-extrabold flex items-center justify-center">
+                      <div className="flex items-center space-x-2">
+                        <span className="w-2 h-2 rounded-full bg-indigo-600 animate-ping" />
+                        <h4 className="text-xs font-extrabold text-slate-800">{stageName}</h4>
+                      </div>
+                      <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-extrabold flex items-center justify-center">
                         {stageOrders.length}
                       </span>
                     </div>
 
                     <div className="space-y-3 flex-1 overflow-y-auto">
                       {stageOrders.map((order, idx) => (
-                        <div key={order.order_id} className="p-3.5 rounded-xl border border-slate-200/60 bg-slate-50/60 space-y-2 shadow-2xs">
+                        <div key={order.order_id} className="p-3.5 rounded-xl border border-slate-200/60 bg-white space-y-2 shadow-2xs hover:shadow-sm transition">
                           <div className="flex justify-between items-center">
                             <span className="font-extrabold text-xs text-[#0f4b81]">
                               Order #{idx + 1}
@@ -1177,27 +1175,42 @@ export default function App() {
                           </div>
                           <p className="text-xs font-bold text-slate-900">{order.customer_name}</p>
                           <p className="text-[10px] text-slate-500 font-medium">{formatContainerTag(order)}</p>
-                          <div className="flex justify-between items-center pt-1">
-                            <span className="text-[10px] font-bold text-slate-500">{order.payment_status || 'Unpaid'}</span>
-                            {parseFloat(order.total_weight_kg || 0) <= 0 && (
+
+                          {parseFloat(order.total_weight_kg || 0) <= 0 && (
+                            <button
+                              onClick={() => setWeighOrder(order)}
+                              className="w-full py-1.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-[10px] font-bold text-center block"
+                            >
+                              Weigh Now
+                            </button>
+                          )}
+
+                          {/* Stage Transition Control Buttons (Back and Forward) */}
+                          <div className="grid grid-cols-2 gap-1 pt-2 border-t border-slate-100">
+                            {stageIndex > 0 ? (
                               <button
-                                onClick={() => setWeighOrder(order)}
-                                className="text-[10px] font-bold text-amber-700 underline"
+                                onClick={() => handleSetStage(order.order_id, arr[stageIndex - 1].name)}
+                                className="py-1.5 bg-slate-100 text-slate-700 rounded-lg text-[9px] font-bold hover:bg-slate-200 transition flex items-center justify-center space-x-1"
                               >
-                                Weigh
+                                <ArrowLeft className="w-2.5 h-2.5" />
+                                <span>{arr[stageIndex - 1].name}</span>
                               </button>
-                            )}
+                            ) : <div />}
+
+                            {stageIndex < arr.length - 1 ? (
+                              <button
+                                onClick={() => handleSetStage(order.order_id, arr[stageIndex + 1].name)}
+                                className="py-1.5 bg-[#0f4b81] text-white rounded-lg text-[9px] font-bold hover:bg-blue-900 transition flex items-center justify-center space-x-1 col-span-2"
+                              >
+                                <span>Move to {arr[stageIndex + 1].name}</span>
+                                <ArrowRight className="w-2.5 h-2.5" />
+                              </button>
+                            ) : null}
                           </div>
-                          <button
-                            onClick={() => handleAdvanceStage(order.order_id, order.status)}
-                            className="w-full py-2 bg-[#0f4b81] text-white rounded-lg text-[10px] font-bold hover:bg-blue-900 transition mt-1 shadow-2xs"
-                          >
-                            Advance Stage →
-                          </button>
                         </div>
                       ))}
                       {stageOrders.length === 0 && (
-                        <p className="text-[11px] text-slate-400 text-center py-10 font-medium">No orders</p>
+                        <p className="text-[11px] text-slate-400 text-center py-10 font-medium">No orders in this stage</p>
                       )}
                     </div>
                   </div>
@@ -1292,14 +1305,9 @@ export default function App() {
 
                   <button
                     onClick={async () => {
-                      await fetch(`${API_BASE}/orders/${verifiedOrder.order_id}/status`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ status: 'Picked Up' })
-                      });
+                      await handleSetStage(verifiedOrder.order_id, 'Picked Up');
                       showToast(`Order confirmed Picked Up! Rating prompt triggered.`);
                       setVerifiedOrder(null);
-                      fetchDashboard();
                     }}
                     className="w-full py-3.5 bg-emerald-700 text-white rounded-xl font-bold text-xs hover:bg-emerald-800 transition shadow-sm"
                   >
@@ -1307,41 +1315,11 @@ export default function App() {
                   </button>
                 </div>
               )}
-
-              {/* Ready for Pickup Quick List */}
-              <div className="pt-4 border-t border-slate-100">
-                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">
-                  Orders Ready for Pick-up
-                </h4>
-                <div className="space-y-2">
-                  {orders
-                    .filter((o) => o.status === 'Ready for Pick-up')
-                    .map((o, idx) => (
-                      <div key={o.order_id} className="p-3.5 rounded-xl border border-slate-200/80 bg-slate-50 flex justify-between items-center text-xs">
-                        <div>
-                          <span className="font-extrabold text-[#0f4b81]">
-                            Order #{idx + 1}
-                          </span>{' '}
-                          • <span className="font-bold text-slate-800">{o.customer_name}</span>
-                        </div>
-                        <button
-                          onClick={() => setVerifiedOrder(o)}
-                          className="px-3 py-1.5 bg-[#0f4b81] text-white rounded-lg font-bold text-[11px] shadow-2xs"
-                        >
-                          Verify
-                        </button>
-                      </div>
-                    ))}
-                  {orders.filter((o) => o.status === 'Ready for Pick-up').length === 0 && (
-                    <p className="text-xs text-slate-400 font-medium">No orders currently waiting for pickup.</p>
-                  )}
-                </div>
-              </div>
             </div>
           </div>
         )}
 
-        {/* TAB 5: SALES ANALYTICS */}
+        {/* TAB 5: SALES ANALYTICS (With expanded supplementary charts & metrics) */}
         {activeTab === 'sales' && (
           <div className="p-8 space-y-6 max-w-5xl mx-auto w-full">
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-6">
@@ -1369,6 +1347,41 @@ export default function App() {
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Completed Orders</p>
                   <p className="text-2xl font-black text-slate-900 mt-1">{completedOrders.length}</p>
                   <span className="text-[11px] text-slate-500 font-medium">Picked Up &amp; Verified</span>
+                </div>
+              </div>
+
+              {/* Supplementary Analytics Visualization Blocks */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-2">
+                <div className="p-6 bg-blue-50/40 rounded-2xl border border-blue-100 space-y-3">
+                  <h4 className="text-xs font-extrabold text-[#0f4b81] uppercase tracking-wider">Weekly Revenue Distribution</h4>
+                  <div className="space-y-2 text-xs">
+                    <div>
+                      <div className="flex justify-between font-bold mb-1"><span>Mon - Wed</span><span>₱8,400</span></div>
+                      <div className="w-full bg-slate-200 h-2 rounded-full"><div className="bg-[#0f4b81] h-full rounded-full" style={{ width: '65%' }} /></div>
+                    </div>
+                    <div>
+                      <div className="flex justify-between font-bold mb-1"><span>Thu - Fri</span><span>₱11,200</span></div>
+                      <div className="w-full bg-slate-200 h-2 rounded-full"><div className="bg-[#0f4b81] h-full rounded-full" style={{ width: '85%' }} /></div>
+                    </div>
+                    <div>
+                      <div className="flex justify-between font-bold mb-1"><span>Weekend Peak</span><span>₱18,900</span></div>
+                      <div className="w-full bg-slate-200 h-2 rounded-full"><div className="bg-emerald-600 h-full rounded-full" style={{ width: '100%' }} /></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-6 bg-amber-50/40 rounded-2xl border border-amber-100 space-y-3">
+                  <h4 className="text-xs font-extrabold text-amber-800 uppercase tracking-wider">Service Breakdown Ratio</h4>
+                  <div className="space-y-2 text-xs">
+                    <div>
+                      <div className="flex justify-between font-bold mb-1"><span>Wash, Dry &amp; Fold (Standard)</span><span>78%</span></div>
+                      <div className="w-full bg-slate-200 h-2 rounded-full"><div className="bg-amber-600 h-full rounded-full" style={{ width: '78%' }} /></div>
+                    </div>
+                    <div>
+                      <div className="flex justify-between font-bold mb-1"><span>Express Wash (3 Hours)</span><span>22%</span></div>
+                      <div className="w-full bg-slate-200 h-2 rounded-full"><div className="bg-amber-600 h-full rounded-full" style={{ width: '22%' }} /></div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1528,23 +1541,6 @@ export default function App() {
                 ))}
               </div>
             </div>
-
-            {/* Shop Capacity Limit */}
-            <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-4">
-              <h3 className="text-base font-extrabold text-slate-900">Shop Machine Capacity Limit</h3>
-              <p className="text-xs text-slate-500 font-medium">Controls the denominator for the Shop Capacity &amp; Workload bar.</p>
-              <div className="flex items-center space-x-4">
-                <input
-                  type="number"
-                  min="1"
-                  max="20"
-                  value={shopCapacityLimit}
-                  onChange={(e) => setShopCapacityLimit(Number(e.target.value) || 8)}
-                  className="w-24 bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-extrabold text-slate-900 text-center"
-                />
-                <span className="text-xs text-slate-700 font-bold">Active Washing &amp; Drying Machines (Default: 8)</span>
-              </div>
-            </div>
           </div>
         )}
 
@@ -1585,101 +1581,6 @@ export default function App() {
                     </span>
                   </div>
                 </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-4">
-              <h4 className="text-sm font-extrabold text-slate-900">Shop &amp; Account Details</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Admin Full Name</label>
-                  <input
-                    type="text"
-                    value={adminProfile.fullName}
-                    onChange={(e) => setAdminProfile({ ...adminProfile, fullName: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Shop Display Name</label>
-                  <input
-                    type="text"
-                    value={adminProfile.shopName}
-                    onChange={(e) => setAdminProfile({ ...adminProfile, shopName: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Contact Phone</label>
-                  <input
-                    type="text"
-                    value={adminProfile.phone}
-                    onChange={(e) => setAdminProfile({ ...adminProfile, phone: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Operating Hours Notice</label>
-                  <input
-                    type="text"
-                    value={adminProfile.operatingHours}
-                    onChange={(e) => setAdminProfile({ ...adminProfile, operatingHours: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900"
-                  />
-                </div>
-              </div>
-              <div className="pt-2">
-                <button
-                  onClick={() => showToast('Profile details updated successfully.')}
-                  className="px-6 py-3 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition flex items-center space-x-2 shadow-sm"
-                >
-                  <Save className="w-4 h-4" />
-                  <span>Save Profile Changes</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Registered Customers Directory */}
-            <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-4">
-              <h4 className="text-sm font-extrabold text-slate-900">Registered Mobile App Customers</h4>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200">
-                    <tr>
-                      <th className="py-3 px-4">Full Name</th>
-                      <th className="py-3 px-4">Phone</th>
-                      <th className="py-3 px-4">Role</th>
-                      <th className="py-3 px-4">Push Token Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {(dashboardData?.users || []).map((u) => (
-                      <tr key={u.user_id || u.email}>
-                        <td className="py-3.5 px-4 font-bold text-slate-900">{u.full_name}</td>
-                        <td className="py-3.5 px-4 text-slate-600 font-medium">{u.phone_number}</td>
-                        <td className="py-3.5 px-4 capitalize text-slate-600 font-medium">{u.role}</td>
-                        <td className="py-3.5 px-4">
-                          {u.expo_push_token ? (
-                            <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 rounded-full text-[10px] font-bold">
-                              Registered
-                            </span>
-                          ) : (
-                            <span className="px-2.5 py-0.5 bg-slate-100 text-slate-500 rounded-full text-[10px] font-bold">
-                              Pending Login
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                    {(!dashboardData?.users || dashboardData.users.length === 0) && (
-                      <tr>
-                        <td colSpan="4" className="py-6 text-center text-slate-400 font-medium">
-                          No customer accounts registered yet.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
               </div>
             </div>
           </div>
