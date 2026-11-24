@@ -221,7 +221,7 @@ export default function App() {
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-100">
+        <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-100">
           <div className="bg-gradient-to-br from-[#0f4b81] to-blue-900 p-8 text-white text-center space-y-3">
             <h1 className="text-xl font-extrabold tracking-tight">KSCync Admin Portal</h1>
             <p className="text-xs text-blue-100">KSC Laundry Shop Management System</p>
@@ -248,7 +248,7 @@ export default function App() {
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-xs font-medium text-slate-900"
                 />
               </div>
-              <button type="submit" className="w-full py-3.5 bg-[#0f4b81] text-white rounded-xl font-bold text-xs">
+              <button type="submit" className="w-full py-3.5 bg-[#0f4b81] text-white rounded-xl font-bold text-xs shadow-md">
                 Sign In to Admin Hub
               </button>
             </form>
@@ -340,7 +340,7 @@ export default function App() {
 
         {weighOrder && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
               <h3 className="text-sm font-extrabold">Weigh &amp; Tag Order #{weighOrder.order_id}</h3>
               <form onSubmit={handleSaveWeighIn} className="space-y-3">
                 <input
@@ -357,28 +357,29 @@ export default function App() {
           </div>
         )}
 
+        {/* TAB 1: DASHBOARD */}
         {activeTab === 'dashboard' && (
           <div className="p-8 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-              <div className="bg-white p-6 rounded-2xl border border-slate-200">
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs">
                 <p className="text-xs font-bold uppercase text-slate-400 mb-1">Today's Total Orders</p>
                 <h3 className="text-2xl font-black text-slate-900">{orders.length}</h3>
               </div>
-              <div className="bg-white p-6 rounded-2xl border border-slate-200">
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs">
                 <p className="text-xs font-bold uppercase text-slate-400 mb-1">Active Orders</p>
                 <h3 className="text-2xl font-black text-[#0f4b81]">{activeOrders.length}</h3>
               </div>
-              <div className="bg-white p-6 rounded-2xl border border-slate-200">
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs">
                 <p className="text-xs font-bold uppercase text-slate-400 mb-1">Estimated Sales Today</p>
                 <h3 className="text-2xl font-black text-emerald-700">₱{estimatedLiveSales.toLocaleString()}</h3>
               </div>
-              <div className="bg-white p-6 rounded-2xl border border-slate-200">
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs">
                 <p className="text-xs font-bold uppercase text-slate-400 mb-1">Shop Status</p>
                 <h3 className="text-xl font-black text-blue-900">LOOSE / NORMAL</h3>
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200 p-6">
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-2xs">
               <h3 className="text-sm font-extrabold text-slate-900 mb-4">Daily Analytics Summary &amp; Current Orders</h3>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
@@ -399,7 +400,7 @@ export default function App() {
                         <td className="py-3.5 px-4 text-right">
                           <button
                             onClick={() => handleSetStage(o.order_id, 'Washing')}
-                            className="px-3 py-1 bg-[#0f4b81] text-white rounded-lg text-[10px] font-bold"
+                            className="px-3 py-1 bg-[#0f4b81] text-white rounded-lg text-[10px] font-bold shadow-2xs"
                           >
                             Set Washing
                           </button>
@@ -413,9 +414,10 @@ export default function App() {
           </div>
         )}
 
+        {/* TAB 2: INTAKE */}
         {activeTab === 'intake' && (
           <div className="p-8 max-w-2xl mx-auto w-full">
-            <div className="bg-white rounded-2xl border border-slate-200 p-8 space-y-4">
+            <div className="bg-white rounded-3xl border border-slate-200 p-8 space-y-4 shadow-xs">
               <h3 className="text-base font-extrabold">Walk-in Customer Intake Form</h3>
               <form onSubmit={handleCreateOrder} className="space-y-4">
                 <input
@@ -450,7 +452,7 @@ export default function App() {
                   placeholder="Container Description"
                   className="w-full bg-slate-50 border rounded-xl p-3 text-xs"
                 />
-                <button type="submit" className="w-full py-3.5 bg-[#0f4b81] text-white rounded-xl font-bold text-xs">
+                <button type="submit" className="w-full py-3.5 bg-[#0f4b81] text-white rounded-xl font-bold text-xs shadow-sm">
                   Log Walk-in Order
                 </button>
               </form>
@@ -458,6 +460,7 @@ export default function App() {
           </div>
         )}
 
+        {/* TAB 3: PROGRESS MANAGER (KANDAN) */}
         {activeTab === 'progress' && (
           <div className="p-8 space-y-4">
             <div className="flex items-center space-x-3 mb-2">
@@ -465,7 +468,7 @@ export default function App() {
                 type="date"
                 value={progressDateFilter}
                 onChange={(e) => setProgressDateFilter(e.target.value)}
-                className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold"
+                className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold shadow-2xs"
               />
               <span className="text-xs text-slate-500 font-medium">Filter Kanban workflow by date</span>
             </div>
@@ -480,7 +483,7 @@ export default function App() {
                 });
 
                 return (
-                  <div key={stageName} className="bg-white rounded-2xl border border-slate-200 p-3.5 flex flex-col shadow-xs">
+                  <div key={stageName} className="bg-white rounded-2xl border border-slate-200 p-3.5 flex flex-col shadow-2xs">
                     <div className="flex justify-between items-center pb-2.5 border-b border-slate-100 mb-2">
                       <div className="flex items-center space-x-2">
                         <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping" />
@@ -525,9 +528,10 @@ export default function App() {
           </div>
         )}
 
+        {/* TAB 4: PICKUP VERIFICATION */}
         {activeTab === 'pickup' && (
           <div className="p-8 max-w-xl mx-auto w-full">
-            <div className="bg-white rounded-2xl border border-slate-200 p-8 space-y-4">
+            <div className="bg-white rounded-3xl border border-slate-200 p-8 space-y-4 shadow-xs">
               <h3 className="text-base font-extrabold">Pickup Verification Counter</h3>
               <input
                 type="text"
@@ -541,12 +545,12 @@ export default function App() {
                   const found = orders.find(o => o.customer_name.toLowerCase().includes(searchQuery.toLowerCase().trim()));
                   setVerifiedOrder(found || null);
                 }}
-                className="w-full py-3 bg-[#0f4b81] text-white rounded-xl font-bold text-xs"
+                className="w-full py-3 bg-[#0f4b81] text-white rounded-xl font-bold text-xs shadow-sm"
               >
                 Verify Order
               </button>
               {verifiedOrder && (
-                <div className="p-4 bg-blue-50 rounded-xl space-y-2 text-xs">
+                <div className="p-4 bg-blue-50 rounded-2xl space-y-2 text-xs border border-blue-100">
                   <p className="font-bold">Customer: {verifiedOrder.customer_name}</p>
                   <p>Status: {verifiedOrder.status}</p>
                   <button
@@ -554,7 +558,7 @@ export default function App() {
                       await handleSetStage(verifiedOrder.order_id, 'Picked Up');
                       setVerifiedOrder(null);
                     }}
-                    className="w-full py-2 bg-emerald-600 text-white rounded-lg font-bold"
+                    className="w-full py-2.5 bg-emerald-600 text-white rounded-xl font-bold shadow-sm"
                   >
                     Confirm Pickup Complete
                   </button>
@@ -564,16 +568,17 @@ export default function App() {
           </div>
         )}
 
+        {/* TAB 5: SALES ANALYTICS */}
         {activeTab === 'sales' && (
           <div className="p-8 max-w-4xl mx-auto w-full space-y-6">
-            <div className="bg-white rounded-2xl border border-slate-200 p-8 space-y-4">
+            <div className="bg-white rounded-3xl border border-slate-200 p-8 space-y-4 shadow-xs">
               <h3 className="text-base font-extrabold">Sales Analytics &amp; Revenue Reports</h3>
               <div className="grid grid-cols-2 gap-4">
-                <div className="p-5 bg-slate-50 rounded-xl border">
+                <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200">
                   <p className="text-xs font-bold text-slate-400">Total Revenue</p>
                   <p className="text-2xl font-black text-slate-900 mt-1">₱{(orders.length * 140).toLocaleString()}.00</p>
                 </div>
-                <div className="p-5 bg-slate-50 rounded-xl border">
+                <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200">
                   <p className="text-xs font-bold text-slate-400">Completed Orders</p>
                   <p className="text-2xl font-black text-[#0f4b81] mt-1">{orders.filter(o => o.status === 'Picked Up').length}</p>
                 </div>
@@ -582,44 +587,46 @@ export default function App() {
           </div>
         )}
 
+        {/* TAB 6: UTILITY */}
         {activeTab === 'utility' && (
           <div className="p-8 max-w-4xl mx-auto w-full">
-            <div className="bg-white rounded-2xl border border-slate-200 p-8 space-y-4">
+            <div className="bg-white rounded-3xl border border-slate-200 p-8 space-y-4 shadow-xs">
               <h3 className="text-base font-extrabold">Utility Analytics &amp; Overhead Costs</h3>
               <div className="grid grid-cols-3 gap-4 text-xs">
                 <div>
                   <label className="font-bold">Water Cost (₱)</label>
-                  <input type="number" value={waterCost} onChange={(e) => setWaterCost(e.target.value)} className="w-full border p-2.5 rounded-xl mt-1" />
+                  <input type="number" value={waterCost} onChange={(e) => setWaterCost(e.target.value)} className="w-full border p-2.5 rounded-xl mt-1 bg-slate-50" />
                 </div>
                 <div>
                   <label className="font-bold">Electricity Cost (₱)</label>
-                  <input type="number" value={electricityCost} onChange={(e) => setElectricityCost(e.target.value)} className="w-full border p-2.5 rounded-xl mt-1" />
+                  <input type="number" value={electricityCost} onChange={(e) => setElectricityCost(e.target.value)} className="w-full border p-2.5 rounded-xl mt-1 bg-slate-50" />
                 </div>
                 <div>
                   <label className="font-bold">Supplies Cost (₱)</label>
-                  <input type="number" value={suppliesCost} onChange={(e) => setSuppliesCost(e.target.value)} className="w-full border p-2.5 rounded-xl mt-1" />
+                  <input type="number" value={suppliesCost} onChange={(e) => setSuppliesCost(e.target.value)} className="w-full border p-2.5 rounded-xl mt-1 bg-slate-50" />
                 </div>
               </div>
             </div>
           </div>
         )}
 
+        {/* TAB 7: SETTINGS */}
         {activeTab === 'settings' && (
           <div className="p-8 max-w-2xl mx-auto w-full">
-            <div className="bg-white rounded-2xl border border-slate-200 p-8 space-y-4">
+            <div className="bg-white rounded-3xl border border-slate-200 p-8 space-y-4 shadow-xs">
               <h3 className="text-base font-extrabold">Publish Announcement</h3>
               <input
                 type="text"
                 placeholder="Title"
                 value={announcementTitle}
                 onChange={(e) => setAnnouncementTitle(e.target.value)}
-                className="w-full border p-3 rounded-xl text-xs"
+                className="w-full border p-3 rounded-xl text-xs bg-slate-50"
               />
               <textarea
                 placeholder="Message"
                 value={announcementMessage}
                 onChange={(e) => setAnnouncementMessage(e.target.value)}
-                className="w-full border p-3 rounded-xl text-xs"
+                className="w-full border p-3 rounded-xl text-xs bg-slate-50"
               />
               <button
                 onClick={async () => {
@@ -632,7 +639,7 @@ export default function App() {
                   setAnnouncementTitle('');
                   setAnnouncementMessage('');
                 }}
-                className="w-full py-3 bg-[#0f4b81] text-white rounded-xl text-xs font-bold"
+                className="w-full py-3 bg-[#0f4b81] text-white rounded-xl text-xs font-bold shadow-sm"
               >
                 Post Announcement
               </button>
@@ -640,9 +647,10 @@ export default function App() {
           </div>
         )}
 
+        {/* TAB 8: PROFILE */}
         {activeTab === 'profile' && (
           <div className="p-8 max-w-2xl mx-auto w-full">
-            <div className="bg-white rounded-2xl border border-slate-200 p-8 space-y-4">
+            <div className="bg-white rounded-3xl border border-slate-200 p-8 space-y-4 shadow-xs">
               <h3 className="text-base font-extrabold">Admin Profile</h3>
               <p className="text-xs text-slate-600">Name: {adminProfile.fullName}</p>
               <p className="text-xs text-slate-600">Shop: {adminProfile.shopName}</p>
