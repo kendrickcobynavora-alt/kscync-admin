@@ -14,6 +14,7 @@ import {
   AlertCircle,
   Shirt,
   ArrowRight,
+  ArrowLeft,
   Package,
   Clock,
   Star,
@@ -28,8 +29,7 @@ import {
   Loader2,
   Lock,
   User,
-  LogOut,
-  ArrowLeft
+  LogOut
 } from 'lucide-react';
 
 export default function App() {
@@ -47,7 +47,7 @@ export default function App() {
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState({ message: '', type: 'success' });
 
-  // Progress Manager Date Filter State & Color Categorization
+  // Progress Manager Date Filter State
   const [progressDateFilter, setProgressDateFilter] = useState('');
 
   // Customer Intake Form State (Walk-in Aligned)
@@ -181,17 +181,6 @@ export default function App() {
   const batch1Weight = Math.min(parsedWeight, maxBatchLimit);
   const batch2Weight =
     parsedWeight > maxBatchLimit ? Number((parsedWeight - maxBatchLimit).toFixed(2)) : 0;
-
-  const workflowStages = [
-    'Scheduled',
-    'Received at Shop',
-    'Washing',
-    'Drying',
-    'Folding',
-    'Ready for Pick-up',
-    'Picked Up',
-    'Completed'
-  ];
 
   const handleSelectExistingUser = (userId) => {
     setSelectedUserId(userId);
@@ -449,7 +438,7 @@ export default function App() {
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans">
-        <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-100">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-100">
           <div className="bg-gradient-to-br from-[#0f4b81] to-blue-900 p-8 text-white text-center space-y-3">
             <div className="inline-flex bg-white/10 p-3.5 rounded-2xl backdrop-blur-sm border border-white/15 shadow-inner">
               <Shirt className="w-8 h-8 text-white" />
@@ -528,7 +517,7 @@ export default function App() {
 
   const orders = dashboardData?.orders || [];
   
-  // Date filtering logic for Progress Manager or general views
+  // Date filtering logic for Progress Manager
   const filteredOrders = orders.filter(o => {
     if (!progressDateFilter) return true;
     const orderDate = new Date(o.created_at).toISOString().split('T')[0];
@@ -1106,7 +1095,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 3: PROGRESS MANAGER (Kanban Board with Color-Coded Statuses, Date Filter, and Back/Forward Stage Buttons) */}
+        {/* TAB 3: PROGRESS MANAGER (Kanban Board with Date Filter, Status Colors, Blinking Dots, and Back/Forward Stage Buttons) */}
         {activeTab === 'progress' && (
           <div className="p-8 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-4 mb-2 bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
