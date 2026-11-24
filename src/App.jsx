@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+ import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard,
   UserPlus,
@@ -30,7 +30,8 @@ import {
   User,
   LogOut,
   ArrowLeft,
-  Users
+  Users,
+  Edit3
 } from 'lucide-react';
 
 export default function App() {
@@ -48,10 +49,10 @@ export default function App() {
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState({ message: '', type: 'success' });
 
-  // Progress Manager Date Filter State & Color Categorization
+  // Progress Manager Date Filter State
   const [progressDateFilter, setProgressDateFilter] = useState('');
 
-  // Customer Intake Form State (Walk-in Aligned)
+  // Customer Intake Form State
   const [selectedUserId, setSelectedUserId] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
@@ -80,16 +81,28 @@ export default function App() {
   const [announcementMessage, setAnnouncementMessage] = useState('');
   const [shopCapacityLimit, setShopCapacityLimit] = useState(8);
 
-  // Admin Profile State
-  const [adminProfile, setAdminProfile] = useState({
-    fullName: 'Admin Owner',
-    role: 'Shop Owner & System Administrator',
-    email: 'admin@kscync.local',
-    phone: '0917 123 4567',
-    shopName: 'KSC Laundry Shop',
-    location: 'Barangay-Based Operations • Makati City',
-    operatingHours: '6:00 AM – 6:00 PM (Drop-offs until 10:00 PM)'
+  // Editable Admin Profile State
+  const [adminProfile, setAdminProfile] = useState(() => {
+    const saved = localStorage.getItem('ksc_admin_profile');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+    return {
+      fullName: 'Admin Owner',
+      role: 'Shop Owner & System Administrator',
+      email: 'admin@kscync.local',
+      phone: '0917 123 4567',
+      shopName: 'KSC Laundry Shop',
+      location: 'Barangay-Based Operations • Makati City',
+      operatingHours: '6:00 AM – 6:00 PM (Drop-offs until 10:00 PM)'
+    };
   });
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState(adminProfile);
+
+  // Customer Edit Modal State
+  const [editingCustomer, setEditingCustomer] = useState(null);
+  const [customerForm, setCustomerForm] = useState({ full_name: '', phone_number: '', email: '' });
 
   const API_BASE = 'https://kscync-backend.onrender.com/api';
 
@@ -238,6 +251,7 @@ export default function App() {
     }
   };
 
+  // Fixed Weigh-In Submission Handler
   const handleSaveWeighIn = async (e) => {
     e.preventDefault();
     if (!weighOrder) return;
@@ -256,30 +270,21 @@ export default function App() {
     }
 
     try {
-      let res = await fetch(`${API_BASE}/orders/${weighOrder.order_id}/weigh`, {
+      const res = await fetch(`${API_BASE}/orders/${weighOrder.order_id}/weigh`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           total_weight_kg: w,
           status: 'Received at Shop',
+          container_description: weighDescription,
           containers
         })
       });
-      if (!res.ok) {
-        res = await fetch(`${API_BASE}/orders/${weighOrder.order_id}/status`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            status: 'Received at Shop',
-            total_weight_kg: w,
-            containers
-          })
-        });
-      }
+      
       if (res.ok) {
-        showToast(`Order #${weighOrder.order_id} weighed (${w} kg) & tagged.`);
+        showToast(`Order #${weighOrder.order_id} weighed (${w} kg) & tagged successfully.`);
         setWeighOrder(null);
-        fetchDashboard();
+        await fetchDashboard();
       } else {
         showToast('Failed to save weigh-in.', 'error');
       }
@@ -436,9 +441,48 @@ export default function App() {
     }
   };
 
+  // Customer Edit & Delete Handlers
+  const handleUpdateCustomer = async (e) => {
+    e.preventDefault();
+    if (!editingCustomer) return;
+    try {
+      const res = await fetch(`${API_BASE}/users/${editingCustomer.user_id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(customerForm)
+      });
+      if (res.ok) {
+        showToast('Customer account updated successfully.');
+        setEditingCustomer(null);
+        fetchDashboard();
+      } else {
+        showToast('Failed to update customer.', 'error');
+      }
+    } catch (err) {
+      showToast('Network error updating customer.', 'error');
+    }
+  };
+
+  const handleDeleteCustomer = async (userId) => {
+    if (!window.confirm('Are you sure you want to delete this customer account?')) return;
+    try {
+      const res = await fetch(`${API_BASE}/users/${userId}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        showToast('Customer account deleted.');
+        fetchDashboard();
+      } else {
+        showToast('Failed to delete customer.', 'error');
+      }
+    } catch (err) {
+      showToast('Network error deleting customer.', 'error');
+    }
+  };
+
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans">
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans antialiased">
         <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-100">
           <div className="bg-gradient-to-br from-[#0f4b81] to-blue-900 p-8 text-white text-center space-y-3">
             <div className="inline-flex bg-white/10 p-3.5 rounded-2xl backdrop-blur-sm border border-white/15 shadow-inner">
@@ -587,11 +631,11 @@ export default function App() {
   ];
 
   return (
-    <div className="flex h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden">
+    <div className="flex h-screen bg-[#f8fafc] font-sans text-slate-900 overflow-hidden antialiased">
       {/* SIDEBAR NAVIGATION */}
-      <aside className="w-64 bg-[#0f4b81] text-white flex flex-col justify-between shadow-xl shrink-0">
+      <aside className="w-64 bg-[#0f4b81] text-white flex flex-col justify-between shadow-2xl shrink-0">
         <div>
-          <div className="p-5 border-b border-white/10 flex items-center space-x-3">
+          <div className="p-6 border-b border-white/10 flex items-center space-x-3">
             <div className="bg-white/10 p-2.5 rounded-xl border border-white/10 shadow-inner">
               <Shirt className="text-white w-5 h-5" />
             </div>
@@ -601,7 +645,7 @@ export default function App() {
             </div>
           </div>
 
-          <nav className="p-3.5 space-y-1">
+          <nav className="p-4 space-y-1.5">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
@@ -609,9 +653,9 @@ export default function App() {
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
-                  className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-xs font-bold transition cursor-pointer ${
                     isActive
-                      ? 'bg-white text-[#0f4b81] shadow-md shadow-black/5'
+                      ? 'bg-white text-[#0f4b81] shadow-md shadow-black/10'
                       : 'text-blue-100 hover:bg-white/10'
                   }`}
                 >
@@ -627,9 +671,9 @@ export default function App() {
         <div className="p-4 border-t border-white/10 bg-black/10 space-y-2">
           <button
             onClick={() => setActiveTab('profile')}
-            className="flex items-center space-x-3 text-left w-full hover:opacity-90 transition p-1 rounded-lg cursor-pointer"
+            className="flex items-center space-x-3 text-left w-full hover:opacity-90 transition p-1.5 rounded-xl cursor-pointer"
           >
-            <div className="w-8 h-8 rounded-full bg-white text-[#0f4b81] font-extrabold flex items-center justify-center text-xs shrink-0 shadow-sm">
+            <div className="w-9 h-9 rounded-full bg-white text-[#0f4b81] font-extrabold flex items-center justify-center text-xs shrink-0 shadow-sm">
               {adminProfile.fullName
                 .split(' ')
                 .map((n) => n[0])
@@ -644,7 +688,7 @@ export default function App() {
           </button>
           <button
             onClick={handleLogout}
-            className="w-full py-2 bg-red-500/20 hover:bg-red-500/30 text-red-100 rounded-xl text-[11px] font-bold flex items-center justify-center space-x-1.5 transition border border-red-500/20 cursor-pointer"
+            className="w-full py-2.5 bg-red-500/20 hover:bg-red-500/30 text-red-100 rounded-xl text-[11px] font-bold flex items-center justify-center space-x-1.5 transition border border-red-500/20 cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" />
             <span>Sign Out</span>
@@ -653,7 +697,7 @@ export default function App() {
       </aside>
 
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 flex flex-col overflow-y-auto relative">
+      <main className="flex-1 flex flex-col overflow-y-auto relative bg-slate-50">
         {/* TOP HEADER */}
         <header className="bg-white border-b border-slate-200/80 px-8 py-4 flex justify-between items-center shadow-xs sticky top-0 z-20">
           <div>
@@ -702,7 +746,7 @@ export default function App() {
         {/* TOAST NOTIFICATION */}
         {toast.message && (
           <div
-            className={`mx-8 mt-4 px-4 py-3 rounded-xl shadow-md flex items-center justify-between text-xs font-bold ${
+            className={`mx-8 mt-4 px-4 py-3 rounded-xl shadow-lg flex items-center justify-between text-xs font-bold ${
               toast.type === 'error'
                 ? 'bg-rose-600 text-white'
                 : 'bg-slate-900 text-white'
@@ -728,16 +772,16 @@ export default function App() {
         {/* WEIGH-IN MODAL */}
         {weighOrder && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-slate-100 space-y-4">
-              <h3 className="text-sm font-extrabold text-slate-900">
+            <div className="bg-white rounded-3xl p-7 max-w-md w-full shadow-2xl border border-slate-100 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+              <h3 className="text-base font-black text-slate-900">
                 Weigh &amp; Tag Order #{weighOrder.order_id}
               </h3>
               <p className="text-xs text-slate-500">
                 Customer: <span className="font-bold text-slate-800">{weighOrder.customer_name}</span>. Enter actual scale weight and container description.
               </p>
-              <form onSubmit={handleSaveWeighIn} className="space-y-3.5">
+              <form onSubmit={handleSaveWeighIn} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                     Actual Weight (kg)
                   </label>
                   <input
@@ -747,11 +791,11 @@ export default function App() {
                     required
                     value={weighInput}
                     onChange={(e) => setWeighInput(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                     Container Description
                   </label>
                   <input
@@ -760,24 +804,82 @@ export default function App() {
                     value={weighDescription}
                     onChange={(e) => setWeighDescription(e.target.value)}
                     placeholder="e.g. Blue Laundry Bag"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
                   />
                 </div>
-                <div className="flex space-x-2.5 pt-2">
+                <div className="flex space-x-3 pt-2">
                   <button
                     type="button"
                     onClick={() => setWeighOrder(null)}
-                    className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold text-xs hover:bg-slate-200 transition cursor-pointer"
+                    className="flex-1 py-3.5 bg-slate-100 text-slate-700 rounded-xl font-bold text-xs hover:bg-slate-200 transition cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="flex-1 py-3 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition flex items-center justify-center space-x-1.5 shadow-sm cursor-pointer"
+                    className="flex-1 py-3.5 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition flex items-center justify-center space-x-1.5 shadow-md cursor-pointer"
                   >
                     {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                     <span>Save &amp; Receive</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* CUSTOMER EDIT MODAL */}
+        {editingCustomer && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-3xl p-7 max-w-md w-full shadow-2xl border border-slate-100 space-y-4">
+              <h3 className="text-base font-black text-slate-900">
+                Edit Customer Account #{editingCustomer.user_id}
+              </h3>
+              <form onSubmit={handleUpdateCustomer} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Full Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={customerForm.full_name}
+                    onChange={(e) => setCustomerForm({ ...customerForm, full_name: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Phone Number</label>
+                  <input
+                    type="text"
+                    required
+                    value={customerForm.phone_number}
+                    onChange={(e) => setCustomerForm({ ...customerForm, phone_number: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Email Address</label>
+                  <input
+                    type="email"
+                    required
+                    value={customerForm.email}
+                    onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
+                  />
+                </div>
+                <div className="flex space-x-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingCustomer(null)}
+                    className="flex-1 py-3.5 bg-slate-100 text-slate-700 rounded-xl font-bold text-xs hover:bg-slate-200 transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-3.5 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition shadow-md cursor-pointer"
+                  >
+                    Save Changes
                   </button>
                 </div>
               </form>
@@ -1529,53 +1631,167 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 8: ADMIN PROFILE & REGISTERED CUSTOMERS DIRECTORY */}
+        {/* TAB 8: EDITABLE ADMIN PROFILE & REGISTERED CUSTOMERS DIRECTORY */}
         {activeTab === 'profile' && (
           <div className="p-8 max-w-5xl mx-auto w-full space-y-6">
-            <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 flex flex-wrap items-center justify-between gap-6">
-              <div className="flex items-center space-x-5">
-                <div className="w-20 h-20 rounded-full bg-[#0f4b81] text-white font-black text-2xl flex items-center justify-center shadow-md">
-                  {adminProfile.fullName
-                    .split(' ')
-                    .map((n) => n[0])
-                    .join('')
-                    .substring(0, 2)
-                    .toUpperCase()}
+            <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8">
+              <div className="flex flex-wrap items-center justify-between gap-6 pb-6 border-b border-slate-100">
+                <div className="flex items-center space-x-5">
+                  <div className="w-20 h-20 rounded-full bg-[#0f4b81] text-white font-black text-2xl flex items-center justify-center shadow-md">
+                    {adminProfile.fullName
+                      .split(' ')
+                      .map((n) => n[0])
+                      .join('')
+                      .substring(0, 2)
+                      .toUpperCase()}
+                  </div>
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <h3 className="text-xl font-black text-slate-900">{adminProfile.fullName}</h3>
+                      <span className="px-3 py-0.5 bg-blue-50 text-[#0f4b81] rounded-full text-[10px] font-bold flex items-center space-x-1 border border-blue-200">
+                        <ShieldCheck className="w-3 h-3" />
+                        <span>Verified Owner</span>
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1 font-medium">{adminProfile.role}</p>
+                    <div className="flex flex-wrap gap-4 mt-3 text-[11px] text-slate-600 font-medium">
+                      <span className="flex items-center space-x-1">
+                        <MapPin className="w-3.5 h-3.5 text-[#0f4b81]" />
+                        <span>{adminProfile.location}</span>
+                      </span>
+                      <span className="flex items-center space-x-1">
+                        <Phone className="w-3.5 h-3.5 text-[#0f4b81]" />
+                        <span>{adminProfile.phone}</span>
+                      </span>
+                      <span className="flex items-center space-x-1">
+                        <Mail className="w-3.5 h-3.5 text-[#0f4b81]" />
+                        <span>{adminProfile.email}</span>
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <div className="flex items-center space-x-2">
-                    <h3 className="text-xl font-black text-slate-900">{adminProfile.fullName}</h3>
-                    <span className="px-3 py-0.5 bg-blue-50 text-[#0f4b81] rounded-full text-[10px] font-bold flex items-center space-x-1 border border-blue-200">
-                      <ShieldCheck className="w-3 h-3" />
-                      <span>Verified Owner</span>
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-1 font-medium">{adminProfile.role}</p>
-                  <div className="flex flex-wrap gap-4 mt-3 text-[11px] text-slate-600 font-medium">
-                    <span className="flex items-center space-x-1">
-                      <MapPin className="w-3.5 h-3.5 text-[#0f4b81]" />
-                      <span>{adminProfile.location}</span>
-                    </span>
-                    <span className="flex items-center space-x-1">
-                      <Phone className="w-3.5 h-3.5 text-[#0f4b81]" />
-                      <span>{adminProfile.phone}</span>
-                    </span>
-                    <span className="flex items-center space-x-1">
-                      <Mail className="w-3.5 h-3.5 text-[#0f4b81]" />
-                      <span>{adminProfile.email}</span>
-                    </span>
-                  </div>
+
+                <div className="flex items-center space-x-3">
+                  {!isEditingProfile ? (
+                    <button
+                      onClick={() => { setProfileForm(adminProfile); setIsEditingProfile(true); }}
+                      className="px-5 py-2.5 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition flex items-center space-x-2 shadow-sm cursor-pointer"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span>Edit Profile &amp; Shop</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setIsEditingProfile(false)}
+                      className="px-5 py-2.5 bg-slate-100 text-slate-700 rounded-xl font-bold text-xs hover:bg-slate-200 transition cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  )}
                 </div>
               </div>
 
-              <div className="bg-blue-50/60 border border-blue-100 p-5 rounded-2xl space-y-1.5 shrink-0">
-                <p className="text-[11px] font-bold text-[#0f4b81] uppercase tracking-wider">Shop Operating Hours</p>
-                <p className="text-xs font-extrabold text-slate-800">{adminProfile.operatingHours}</p>
-                <p className="text-[10px] text-slate-500">Electric Operation • No LPG Utility</p>
-              </div>
+              {/* Editable Profile Form */}
+              {isEditingProfile ? (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    setAdminProfile(profileForm);
+                    localStorage.setItem('ksc_admin_profile', JSON.stringify(profileForm));
+                    setIsEditingProfile(false);
+                    showToast('Admin profile and shop details updated successfully.');
+                  }}
+                  className="space-y-4 pt-6"
+                >
+                  <h4 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider">Update Account &amp; Shop Specifications</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Owner Full Name</label>
+                      <input
+                        type="text"
+                        required
+                        value={profileForm.fullName}
+                        onChange={(e) => setProfileForm({ ...profileForm, fullName: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Shop Name</label>
+                      <input
+                        type="text"
+                        required
+                        value={profileForm.shopName}
+                        onChange={(e) => setProfileForm({ ...profileForm, shopName: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Email Address</label>
+                      <input
+                        type="email"
+                        required
+                        value={profileForm.email}
+                        onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Phone Number</label>
+                      <input
+                        type="text"
+                        required
+                        value={profileForm.phone}
+                        onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Location / Address</label>
+                      <input
+                        type="text"
+                        required
+                        value={profileForm.location}
+                        onChange={(e) => setProfileForm({ ...profileForm, location: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Operating Hours</label>
+                      <input
+                        type="text"
+                        required
+                        value={profileForm.operatingHours}
+                        onChange={(e) => setProfileForm({ ...profileForm, operatingHours: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
+                      />
+                    </div>
+                  </div>
+                  <div className="pt-2">
+                    <button
+                      type="submit"
+                      className="px-6 py-3 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition shadow-md cursor-pointer"
+                    >
+                      Save Profile Updates
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="pt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80">
+                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Shop Specifications</p>
+                    <p className="text-xs font-extrabold text-slate-800 mt-1">{adminProfile.shopName}</p>
+                    <p className="text-[11px] text-slate-600 mt-0.5">{adminProfile.location}</p>
+                  </div>
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80">
+                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Operating Schedule</p>
+                    <p className="text-xs font-extrabold text-slate-800 mt-1">{adminProfile.operatingHours}</p>
+                    <p className="text-[11px] text-emerald-600 mt-0.5 font-semibold">● Barangay-Based (No LPG)</p>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Registered Mobile App Customers Directory */}
+            {/* Registered Mobile App Customers Directory (With Edit & Delete Controls) */}
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-4">
               <div className="flex justify-between items-center">
                 <div className="flex items-center space-x-3">
@@ -1584,7 +1800,7 @@ export default function App() {
                   </div>
                   <div>
                     <h3 className="text-base font-extrabold text-slate-900">Registered Mobile App Customers</h3>
-                    <p className="text-xs text-slate-500 font-medium">Directory of active accounts synced from the customer mobile application.</p>
+                    <p className="text-xs text-slate-500 font-medium">Directory of active accounts synced from the customer mobile application. Admin can edit or delete accounts.</p>
                   </div>
                 </div>
                 <span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-xs font-bold">
@@ -1600,7 +1816,7 @@ export default function App() {
                       <th className="py-3 px-4">Full Name</th>
                       <th className="py-3 px-4">Phone Number</th>
                       <th className="py-3 px-4">Email Address</th>
-                      <th className="py-3 px-4 text-right">Role</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -1610,10 +1826,22 @@ export default function App() {
                         <td className="py-3.5 px-4 font-extrabold text-slate-900">{u.full_name}</td>
                         <td className="py-3.5 px-4 text-slate-600 font-medium">{u.phone_number || 'N/A'}</td>
                         <td className="py-3.5 px-4 text-slate-600 font-medium">{u.email || 'N/A'}</td>
-                        <td className="py-3.5 px-4 text-right">
-                          <span className="px-2.5 py-0.5 bg-blue-50 text-[#0f4b81] rounded-full text-[10px] font-bold uppercase">
-                            {u.role || 'customer'}
-                          </span>
+                        <td className="py-3.5 px-4 text-right space-x-2">
+                          <button
+                            onClick={() => {
+                              setEditingCustomer(u);
+                              setCustomerForm({ full_name: u.full_name, phone_number: u.phone_number || '', email: u.email || '' });
+                            }}
+                            className="px-3 py-1.5 bg-blue-50 text-[#0f4b81] rounded-lg font-bold text-[11px] hover:bg-blue-100 transition cursor-pointer"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteCustomer(u.user_id)}
+                            className="px-3 py-1.5 bg-rose-50 text-rose-600 rounded-lg font-bold text-[11px] hover:bg-rose-100 transition cursor-pointer"
+                          >
+                            Delete
+                          </button>
                         </td>
                       </tr>
                     ))}
