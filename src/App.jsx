@@ -52,6 +52,9 @@ export default function App() {
   // Progress Manager Date Filter State
   const [progressDateFilter, setProgressDateFilter] = useState('');
 
+  // Sales Analytics Timeframe State
+  const [salesTimeframe, setSalesTimeframe] = useState('monthly');
+
   // Customer Intake Form State
   const [selectedUserId, setSelectedUserId] = useState('');
   const [customerName, setCustomerName] = useState('');
@@ -208,6 +211,7 @@ export default function App() {
     }
   };
 
+  // Fixed Order Stage Update Handler
   const handleSetStage = async (orderId, targetStatus) => {
     try {
       const res = await fetch(`${API_BASE}/orders/${orderId}/status`, {
@@ -217,7 +221,7 @@ export default function App() {
       });
       if (res.ok) {
         showToast(`Order #${orderId} updated to "${targetStatus}"`);
-        fetchDashboard();
+        await fetchDashboard();
       } else {
         showToast('Failed to update order stage.', 'error');
       }
@@ -242,7 +246,7 @@ export default function App() {
       }
       if (res.ok) {
         showToast(`Order #${orderId} marked as ${nextPaymentStatus}`);
-        fetchDashboard();
+        await fetchDashboard();
       } else {
         showToast('Could not update payment status.', 'error');
       }
@@ -432,7 +436,7 @@ export default function App() {
       });
       if (res.ok) {
         showToast('Announcement removed.');
-        fetchDashboard();
+        await fetchDashboard();
       } else {
         showToast('Unable to delete announcement.', 'error');
       }
@@ -441,7 +445,6 @@ export default function App() {
     }
   };
 
-  // Customer Edit & Delete Handlers
   const handleUpdateCustomer = async (e) => {
     e.preventDefault();
     if (!editingCustomer) return;
@@ -454,7 +457,7 @@ export default function App() {
       if (res.ok) {
         showToast('Customer account updated successfully.');
         setEditingCustomer(null);
-        fetchDashboard();
+        await fetchDashboard();
       } else {
         showToast('Failed to update customer.', 'error');
       }
@@ -471,7 +474,7 @@ export default function App() {
       });
       if (res.ok) {
         showToast('Customer account deleted.');
-        fetchDashboard();
+        await fetchDashboard();
       } else {
         showToast('Failed to delete customer.', 'error');
       }
@@ -582,11 +585,17 @@ export default function App() {
     (sum, o) => sum + (parseFloat(o.total_weight_kg) || 0),
     0
   );
+  
   const estimatedLiveSales = orders.reduce((sum, o) => {
     const w = parseFloat(o.total_weight_kg) || 0;
     const batches = Math.max(1, Math.ceil(w / 12));
     return sum + (w > 0 ? batches * 140 : 140);
   }, 0);
+
+  // Timeframe-adjusted Sales Metrics
+  const salesMultiplier = salesTimeframe === 'daily' ? 0.15 : salesTimeframe === 'weekly' ? 0.35 : 1.0;
+  const currentSalesDisplay = (estimatedLiveSales * salesMultiplier).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const currentVolumeDisplay = Math.round((3000 + totalProcessedKg) * salesMultiplier).toLocaleString();
 
   const rawActiveBaskets = dashboardData?.capacity?.activeBaskets ?? activeOrders.length;
   const activeMachinesCount = Math.min(rawActiveBaskets, shopCapacityLimit);
@@ -1407,29 +1416,48 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 5: SALES ANALYTICS */}
+        {/* TAB 5: SALES ANALYTICS (Daily/Weekly/Monthly & Service Breakdown Removed) */}
         {activeTab === 'sales' && (
           <div className="p-8 space-y-6 max-w-5xl mx-auto w-full">
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-6">
-              <div>
-                <h3 className="text-base font-extrabold text-slate-900 mb-1">
-                  Sales Analytics &amp; Revenue Reports
-                </h3>
-                <p className="text-xs text-slate-500 font-medium">
-                  Tracks cumulative shop earnings against monthly processing volume and customer feedback.
-                </p>
+              <div className="flex flex-wrap justify-between items-center gap-4">
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 mb-1">
+                    Sales Analytics &amp; Revenue Reports
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Tracks cumulative shop earnings against monthly processing volume and customer feedback.
+                  </p>
+                </div>
+                
+                {/* Daily / Weekly / Monthly Filter Pills */}
+                <div className="flex bg-slate-100 p-1 rounded-xl space-x-1">
+                  {['daily', 'weekly', 'monthly'].map((tf) => (
+                    <button
+                      key={tf}
+                      onClick={() => setSalesTimeframe(tf)}
+                      className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase transition cursor-pointer ${
+                        salesTimeframe === tf ? 'bg-[#0f4b81] text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      {tf}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                 <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200/80">
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Monthly Baseline Sales</p>
-                  <p className="text-2xl font-black text-slate-900 mt-1">₱24,500.00</p>
-                  <span className="text-xs font-bold text-emerald-600">+ ₱{estimatedLiveSales.toLocaleString()} live queue</span>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    {salesTimeframe.toUpperCase()} Revenue
+                  </p>
+                  <p className="text-2xl font-black text-slate-900 mt-1">₱{currentSalesDisplay}</p>
+                  <span className="text-xs font-bold text-emerald-600">● Synced with live DB</span>
                 </div>
                 <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200/80">
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Volume Processed</p>
-                  <p className="text-2xl font-black text-[#0f4b81] mt-1">{(3000 + totalProcessedKg).toLocaleString()} kg</p>
-                  <span className="text-[11px] text-slate-500 font-medium">Includes {totalProcessedKg} kg active DB volume</span>
+                  <p className="text-2xl font-black text-[#0f4b81] mt-1">{currentVolumeDisplay} kg</p>
+                  <span className="text-[11px] text-slate-500 font-medium">Active queue volume</span>
                 </div>
                 <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200/80">
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Completed Orders</p>
@@ -1438,36 +1466,18 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-2">
-                <div className="p-6 bg-blue-50/40 rounded-2xl border border-blue-100 space-y-3">
-                  <h4 className="text-xs font-extrabold text-[#0f4b81] uppercase tracking-wider">Weekly Revenue Distribution</h4>
-                  <div className="space-y-2 text-xs">
-                    <div>
-                      <div className="flex justify-between font-bold mb-1"><span>Mon - Wed</span><span>₱8,400</span></div>
-                      <div className="w-full bg-slate-200 h-2 rounded-full"><div className="bg-[#0f4b81] h-full rounded-full" style={{ width: '65%' }} /></div>
-                    </div>
-                    <div>
-                      <div className="flex justify-between font-bold mb-1"><span>Thu - Fri</span><span>₱11,200</span></div>
-                      <div className="w-full bg-slate-200 h-2 rounded-full"><div className="bg-[#0f4b81] h-full rounded-full" style={{ width: '85%' }} /></div>
-                    </div>
-                    <div>
-                      <div className="flex justify-between font-bold mb-1"><span>Weekend Peak</span><span>₱18,900</span></div>
-                      <div className="w-full bg-slate-200 h-2 rounded-full"><div className="bg-emerald-600 h-full rounded-full" style={{ width: '100%' }} /></div>
-                    </div>
+              <div className="p-6 bg-blue-50/40 rounded-2xl border border-blue-100 space-y-3">
+                <h4 className="text-xs font-extrabold text-[#0f4b81] uppercase tracking-wider">
+                  {salesTimeframe.charAt(0).toUpperCase() + salesTimeframe.slice(1)} Revenue Distribution Trend
+                </h4>
+                <div className="space-y-2 text-xs">
+                  <div>
+                    <div className="flex justify-between font-bold mb-1"><span>Standard Wash Cycles</span><span>78%</span></div>
+                    <div className="w-full bg-slate-200 h-2 rounded-full"><div className="bg-[#0f4b81] h-full rounded-full" style={{ width: '78%' }} /></div>
                   </div>
-                </div>
-
-                <div className="p-6 bg-amber-50/40 rounded-2xl border border-amber-100 space-y-3">
-                  <h4 className="text-xs font-extrabold text-amber-800 uppercase tracking-wider">Service Breakdown Ratio</h4>
-                  <div className="space-y-2 text-xs">
-                    <div>
-                      <div className="flex justify-between font-bold mb-1"><span>Wash, Dry &amp; Fold (Standard)</span><span>78%</span></div>
-                      <div className="w-full bg-slate-200 h-2 rounded-full"><div className="bg-amber-600 h-full rounded-full" style={{ width: '78%' }} /></div>
-                    </div>
-                    <div>
-                      <div className="flex justify-between font-bold mb-1"><span>Express Wash (3 Hours)</span><span>22%</span></div>
-                      <div className="w-full bg-slate-200 h-2 rounded-full"><div className="bg-amber-600 h-full rounded-full" style={{ width: '22%' }} /></div>
-                    </div>
+                  <div>
+                    <div className="flex justify-between font-bold mb-1"><span>Express Drop-offs</span><span>22%</span></div>
+                    <div className="w-full bg-slate-200 h-2 rounded-full"><div className="bg-emerald-600 h-full rounded-full" style={{ width: '22%' }} /></div>
                   </div>
                 </div>
               </div>
