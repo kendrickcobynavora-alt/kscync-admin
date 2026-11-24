@@ -211,7 +211,7 @@ export default function App() {
     }
   };
 
-  // Fixed Order Stage Update Handler
+  // Fixed Robust Order Stage Update Handler
   const handleSetStage = async (orderId, targetStatus) => {
     try {
       const res = await fetch(`${API_BASE}/orders/${orderId}/status`, {
@@ -219,11 +219,12 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: targetStatus })
       });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         showToast(`Order #${orderId} updated to "${targetStatus}"`);
         await fetchDashboard();
       } else {
-        showToast('Failed to update order stage.', 'error');
+        showToast(data.error || 'Failed to update order stage.', 'error');
       }
     } catch (err) {
       showToast('Network error connecting to backend.', 'error');
@@ -255,7 +256,6 @@ export default function App() {
     }
   };
 
-  // Fixed Weigh-In Submission Handler
   const handleSaveWeighIn = async (e) => {
     e.preventDefault();
     if (!weighOrder) return;
@@ -592,7 +592,6 @@ export default function App() {
     return sum + (w > 0 ? batches * 140 : 140);
   }, 0);
 
-  // Timeframe-adjusted Sales Metrics
   const salesMultiplier = salesTimeframe === 'daily' ? 0.15 : salesTimeframe === 'weekly' ? 0.35 : 1.0;
   const currentSalesDisplay = (estimatedLiveSales * salesMultiplier).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const currentVolumeDisplay = Math.round((3000 + totalProcessedKg) * salesMultiplier).toLocaleString();
@@ -1204,7 +1203,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 3: PROGRESS MANAGER */}
+        {/* TAB 3: PROGRESS MANAGER (Fixed using true order.order_id) */}
         {activeTab === 'progress' && (
           <div className="p-8 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-4 mb-2 bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
@@ -1261,11 +1260,11 @@ export default function App() {
                     </div>
 
                     <div className="space-y-3 flex-1 overflow-y-auto">
-                      {stageOrders.map((order, idx) => (
+                      {stageOrders.map((order) => (
                         <div key={order.order_id} className="p-3.5 rounded-xl border border-slate-200/60 bg-white space-y-2 shadow-2xs hover:shadow-sm transition">
                           <div className="flex justify-between items-center">
                             <span className="font-extrabold text-xs text-[#0f4b81]">
-                              Order #{idx + 1}
+                              Order #{order.order_id}
                             </span>
                             <span className="text-[11px] font-semibold text-slate-500">
                               {parseFloat(order.total_weight_kg || 0) > 0 ? `${order.total_weight_kg} kg` : 'Unweighed'}
@@ -1416,7 +1415,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 5: SALES ANALYTICS (Daily/Weekly/Monthly & Service Breakdown Removed) */}
+        {/* TAB 5: SALES ANALYTICS */}
         {activeTab === 'sales' && (
           <div className="p-8 space-y-6 max-w-5xl mx-auto w-full">
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-6">
@@ -1430,7 +1429,6 @@ export default function App() {
                   </p>
                 </div>
                 
-                {/* Daily / Weekly / Monthly Filter Pills */}
                 <div className="flex bg-slate-100 p-1 rounded-xl space-x-1">
                   {['daily', 'weekly', 'monthly'].map((tf) => (
                     <button
@@ -1801,7 +1799,7 @@ export default function App() {
               )}
             </div>
 
-            {/* Registered Mobile App Customers Directory (With Edit & Delete Controls) */}
+            {/* Registered Mobile App Customers Directory */}
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-4">
               <div className="flex justify-between items-center">
                 <div className="flex items-center space-x-3">
