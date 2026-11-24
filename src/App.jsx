@@ -1,4 +1,4 @@
- import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard,
   UserPlus,
@@ -29,7 +29,8 @@ import {
   Lock,
   User,
   LogOut,
-  ArrowLeft
+  ArrowLeft,
+  Users
 } from 'lucide-react';
 
 export default function App() {
@@ -182,17 +183,6 @@ export default function App() {
   const batch2Weight =
     parsedWeight > maxBatchLimit ? Number((parsedWeight - maxBatchLimit).toFixed(2)) : 0;
 
-  const workflowStages = [
-    'Scheduled',
-    'Received at Shop',
-    'Washing',
-    'Drying',
-    'Folding',
-    'Ready for Pick-up',
-    'Picked Up',
-    'Completed'
-  ];
-
   const handleSelectExistingUser = (userId) => {
     setSelectedUserId(userId);
     if (!userId) return;
@@ -321,7 +311,7 @@ export default function App() {
         if (matchedUser) {
           resolvedUserId = matchedUser.user_id;
         } else {
-          const regRes = await fetch(`${API_BASE}/auth/register`, {
+          const regRes = await fetch(`${API_BASE}/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -485,7 +475,7 @@ export default function App() {
                     value={loginUsername}
                     onChange={(e) => setLoginUsername(e.target.value)}
                     placeholder="admin@kscync.local"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81] focus:ring-2 focus:ring-[#0f4b81]/10 transition"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81] focus:ring-2 focus:ring-[#0f4b81]/15 transition shadow-2xs"
                   />
                 </div>
               </div>
@@ -504,7 +494,7 @@ export default function App() {
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81] focus:ring-2 focus:ring-[#0f4b81]/10 transition"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81] focus:ring-2 focus:ring-[#0f4b81]/15 transition shadow-2xs"
                   />
                 </div>
               </div>
@@ -513,7 +503,7 @@ export default function App() {
                 <button
                   type="submit"
                   disabled={loginLoading}
-                  className="w-full py-3.5 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition shadow-lg shadow-blue-900/10 flex items-center justify-center space-x-2 disabled:opacity-70"
+                  className="w-full py-3.5 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition shadow-lg shadow-blue-900/10 flex items-center justify-center space-x-2 disabled:opacity-70 cursor-pointer"
                 >
                   {loginLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                   <span>{loginLoading ? 'Authenticating...' : 'Sign In to Admin Hub'}</span>
@@ -528,7 +518,6 @@ export default function App() {
 
   const orders = dashboardData?.orders || [];
   
-  // Date filtering logic for Progress Manager or general views
   const filteredOrders = orders.filter(o => {
     if (!progressDateFilter) return true;
     const orderDate = new Date(o.created_at).toISOString().split('T')[0];
@@ -603,7 +592,7 @@ export default function App() {
       <aside className="w-64 bg-[#0f4b81] text-white flex flex-col justify-between shadow-xl shrink-0">
         <div>
           <div className="p-5 border-b border-white/10 flex items-center space-x-3">
-            <div className="bg-white/10 p-2.5 rounded-xl border border-white/10">
+            <div className="bg-white/10 p-2.5 rounded-xl border border-white/10 shadow-inner">
               <Shirt className="text-white w-5 h-5" />
             </div>
             <div>
@@ -620,7 +609,7 @@ export default function App() {
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
-                  className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition ${
+                  className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
                     isActive
                       ? 'bg-white text-[#0f4b81] shadow-md shadow-black/5'
                       : 'text-blue-100 hover:bg-white/10'
@@ -638,7 +627,7 @@ export default function App() {
         <div className="p-4 border-t border-white/10 bg-black/10 space-y-2">
           <button
             onClick={() => setActiveTab('profile')}
-            className="flex items-center space-x-3 text-left w-full hover:opacity-90 transition p-1 rounded-lg"
+            className="flex items-center space-x-3 text-left w-full hover:opacity-90 transition p-1 rounded-lg cursor-pointer"
           >
             <div className="w-8 h-8 rounded-full bg-white text-[#0f4b81] font-extrabold flex items-center justify-center text-xs shrink-0 shadow-sm">
               {adminProfile.fullName
@@ -655,7 +644,7 @@ export default function App() {
           </button>
           <button
             onClick={handleLogout}
-            className="w-full py-2 bg-red-500/20 hover:bg-red-500/30 text-red-100 rounded-xl text-[11px] font-bold flex items-center justify-center space-x-1.5 transition border border-red-500/20"
+            className="w-full py-2 bg-red-500/20 hover:bg-red-500/30 text-red-100 rounded-xl text-[11px] font-bold flex items-center justify-center space-x-1.5 transition border border-red-500/20 cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" />
             <span>Sign Out</span>
@@ -703,7 +692,7 @@ export default function App() {
             <button
               onClick={fetchDashboard}
               title="Sync with Cloud DB"
-              className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-600 transition shadow-2xs"
+              className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-600 transition shadow-2xs cursor-pointer"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
@@ -729,7 +718,7 @@ export default function App() {
             </div>
             <button
               onClick={() => setToast({ message: '', type: 'success' })}
-              className="text-white/80 hover:text-white ml-4 text-[11px] underline"
+              className="text-white/80 hover:text-white ml-4 text-[11px] underline cursor-pointer"
             >
               Dismiss
             </button>
@@ -778,14 +767,14 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setWeighOrder(null)}
-                    className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold text-xs hover:bg-slate-200 transition"
+                    className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold text-xs hover:bg-slate-200 transition cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="flex-1 py-3 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition flex items-center justify-center space-x-1.5 shadow-sm"
+                    className="flex-1 py-3 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition flex items-center justify-center space-x-1.5 shadow-sm cursor-pointer"
                   >
                     {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                     <span>Save &amp; Receive</span>
@@ -796,7 +785,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 1: DASHBOARD (Showing Today's Summary & Current Orders Immediately) */}
+        {/* TAB 1: DASHBOARD */}
         {activeTab === 'dashboard' && (
           <div className="p-8 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
@@ -836,7 +825,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Current Orders for Today & Action Banner */}
             <div className="bg-white p-6 rounded-2xl shadow-xs border border-slate-200/80 flex flex-wrap justify-between items-center gap-4">
               <div className="flex items-center space-x-3.5">
                 <div className={`p-3 rounded-xl ${isTight ? 'bg-rose-100 text-rose-700 animate-bounce' : 'bg-emerald-100 text-emerald-700'}`}>
@@ -856,13 +844,12 @@ export default function App() {
 
               <button
                 onClick={() => setActiveTab('intake')}
-                className="px-5 py-3 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition shadow-sm"
+                className="px-5 py-3 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition shadow-sm cursor-pointer"
               >
                 + Walk-in Customer Intake
               </button>
             </div>
 
-            {/* Current Orders Table for Today */}
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-6">
               <div className="flex justify-between items-center mb-5">
                 <h3 className="text-sm font-extrabold text-slate-900 flex items-center space-x-2">
@@ -871,7 +858,7 @@ export default function App() {
                 </h3>
                 <button
                   onClick={() => setActiveTab('progress')}
-                  className="text-xs font-bold text-[#0f4b81] flex items-center space-x-1 hover:underline"
+                  className="text-xs font-bold text-[#0f4b81] flex items-center space-x-1 hover:underline cursor-pointer"
                 >
                   <span>Open Kanban Progress Manager</span>
                   <ArrowRight className="w-3.5 h-3.5" />
@@ -892,7 +879,7 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {activeOrders.map((order, index) => {
+                    {activeOrders.map((order) => {
                       const isUnweighed = parseFloat(order.total_weight_kg || 0) <= 0;
                       const isPaid = (order.payment_status || '').toLowerCase() === 'paid';
                       return (
@@ -910,7 +897,7 @@ export default function App() {
                                   setWeighOrder(order);
                                   setWeighInput('8');
                                 }}
-                                className="px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-[11px] font-bold flex items-center space-x-1 hover:bg-amber-100 shadow-2xs"
+                                className="px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-[11px] font-bold flex items-center space-x-1 hover:bg-amber-100 shadow-2xs cursor-pointer"
                               >
                                 <Scale className="w-3.5 h-3.5" />
                                 <span>Weigh Now</span>
@@ -927,7 +914,7 @@ export default function App() {
                               onClick={() =>
                                 handleUpdatePayment(order.order_id, isPaid ? 'Unpaid' : 'Paid')
                               }
-                              className={`px-3 py-1 rounded-full font-bold text-[11px] transition shadow-2xs ${
+                              className={`px-3 py-1 rounded-full font-bold text-[11px] transition shadow-2xs cursor-pointer ${
                                 isPaid
                                   ? 'bg-emerald-100 text-emerald-800'
                                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -944,7 +931,7 @@ export default function App() {
                           <td className="py-4 px-4 text-right">
                             <button
                               onClick={() => handleSetStage(order.order_id, 'Washing')}
-                              className="px-3 py-1.5 bg-[#0f4b81] text-white rounded-xl font-bold hover:bg-blue-900 transition text-[11px] shadow-sm"
+                              className="px-3 py-1.5 bg-[#0f4b81] text-white rounded-xl font-bold hover:bg-blue-900 transition text-[11px] shadow-sm cursor-pointer"
                             >
                               Move to Washing
                             </button>
@@ -966,7 +953,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 2: WALK-IN CUSTOMER INTAKE */}
+        {/* TAB 2: WALK-IN INTAKE */}
         {activeTab === 'intake' && (
           <div className="p-8 max-w-3xl mx-auto w-full">
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8">
@@ -1095,7 +1082,7 @@ export default function App() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full py-4 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition shadow-md flex items-center justify-center space-x-2 disabled:opacity-70"
+                    className="w-full py-4 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition shadow-md flex items-center justify-center space-x-2 disabled:opacity-70 cursor-pointer"
                   >
                     {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
                     <span>{submitting ? 'Syncing Walk-in Order...' : 'Log Intake & Sync to Customer App'}</span>
@@ -1106,7 +1093,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 3: PROGRESS MANAGER (Kanban Board with Color-Coded Statuses, Date Filter, and Back/Forward Stage Buttons) */}
+        {/* TAB 3: PROGRESS MANAGER */}
         {activeTab === 'progress' && (
           <div className="p-8 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-4 mb-2 bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
@@ -1121,7 +1108,7 @@ export default function App() {
                 {progressDateFilter && (
                   <button
                     onClick={() => setProgressDateFilter('')}
-                    className="text-xs font-bold text-rose-600 hover:underline"
+                    className="text-xs font-bold text-rose-600 hover:underline cursor-pointer"
                   >
                     Clear Filter
                   </button>
@@ -1179,18 +1166,17 @@ export default function App() {
                           {parseFloat(order.total_weight_kg || 0) <= 0 && (
                             <button
                               onClick={() => setWeighOrder(order)}
-                              className="w-full py-1.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-[10px] font-bold text-center block"
+                              className="w-full py-1.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-[10px] font-bold text-center block cursor-pointer"
                             >
                               Weigh Now
                             </button>
                           )}
 
-                          {/* Stage Transition Control Buttons (Back and Forward) */}
                           <div className="grid grid-cols-2 gap-1 pt-2 border-t border-slate-100">
                             {stageIndex > 0 ? (
                               <button
                                 onClick={() => handleSetStage(order.order_id, arr[stageIndex - 1].name)}
-                                className="py-1.5 bg-slate-100 text-slate-700 rounded-lg text-[9px] font-bold hover:bg-slate-200 transition flex items-center justify-center space-x-1"
+                                className="py-1.5 bg-slate-100 text-slate-700 rounded-lg text-[9px] font-bold hover:bg-slate-200 transition flex items-center justify-center space-x-1 cursor-pointer"
                               >
                                 <ArrowLeft className="w-2.5 h-2.5" />
                                 <span>{arr[stageIndex - 1].name}</span>
@@ -1200,7 +1186,7 @@ export default function App() {
                             {stageIndex < arr.length - 1 ? (
                               <button
                                 onClick={() => handleSetStage(order.order_id, arr[stageIndex + 1].name)}
-                                className="py-1.5 bg-[#0f4b81] text-white rounded-lg text-[9px] font-bold hover:bg-blue-900 transition flex items-center justify-center space-x-1 col-span-2"
+                                className="py-1.5 bg-[#0f4b81] text-white rounded-lg text-[9px] font-bold hover:bg-blue-900 transition flex items-center justify-center space-x-1 col-span-2 cursor-pointer"
                               >
                                 <span>Move to {arr[stageIndex + 1].name}</span>
                                 <ArrowRight className="w-2.5 h-2.5" />
@@ -1251,7 +1237,7 @@ export default function App() {
                     );
                     setVerifiedOrder(found || null);
                   }}
-                  className="px-6 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition flex items-center space-x-2 shadow-sm"
+                  className="px-6 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition flex items-center space-x-2 shadow-sm cursor-pointer"
                 >
                   <Search className="w-4 h-4" />
                   <span>Search</span>
@@ -1287,7 +1273,7 @@ export default function App() {
                               verifiedOrder.payment_status === 'Paid' ? 'Unpaid' : 'Paid'
                             )
                           }
-                          className="text-[10px] underline text-[#0f4b81] font-bold"
+                          className="text-[10px] underline text-[#0f4b81] font-bold cursor-pointer"
                         >
                           Toggle
                         </button>
@@ -1309,7 +1295,7 @@ export default function App() {
                       showToast(`Order confirmed Picked Up! Rating prompt triggered.`);
                       setVerifiedOrder(null);
                     }}
-                    className="w-full py-3.5 bg-emerald-700 text-white rounded-xl font-bold text-xs hover:bg-emerald-800 transition shadow-sm"
+                    className="w-full py-3.5 bg-emerald-700 text-white rounded-xl font-bold text-xs hover:bg-emerald-800 transition shadow-sm cursor-pointer"
                   >
                     Confirm Pickup &amp; Trigger Customer Rating Modal
                   </button>
@@ -1319,7 +1305,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 5: SALES ANALYTICS (With expanded supplementary charts & metrics) */}
+        {/* TAB 5: SALES ANALYTICS */}
         {activeTab === 'sales' && (
           <div className="p-8 space-y-6 max-w-5xl mx-auto w-full">
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-6">
@@ -1350,7 +1336,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Supplementary Analytics Visualization Blocks */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-2">
                 <div className="p-6 bg-blue-50/40 rounded-2xl border border-blue-100 space-y-3">
                   <h4 className="text-xs font-extrabold text-[#0f4b81] uppercase tracking-wider">Weekly Revenue Distribution</h4>
@@ -1515,7 +1500,7 @@ export default function App() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-6 py-3 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition flex items-center space-x-2 disabled:opacity-70 shadow-sm"
+                  className="px-6 py-3 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition flex items-center space-x-2 disabled:opacity-70 shadow-sm cursor-pointer"
                 >
                   {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                   <span>Publish to Mobile App</span>
@@ -1532,7 +1517,7 @@ export default function App() {
                     </div>
                     <button
                       onClick={() => handleDeleteAnnouncement(item.announcement_id)}
-                      className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition"
+                      className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition cursor-pointer"
                       title="Delete Announcement"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -1544,9 +1529,9 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 8: ADMIN PROFILE PAGE */}
+        {/* TAB 8: ADMIN PROFILE & REGISTERED CUSTOMERS DIRECTORY */}
         {activeTab === 'profile' && (
-          <div className="p-8 max-w-4xl mx-auto w-full space-y-6">
+          <div className="p-8 max-w-5xl mx-auto w-full space-y-6">
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 flex flex-wrap items-center justify-between gap-6">
               <div className="flex items-center space-x-5">
                 <div className="w-20 h-20 rounded-full bg-[#0f4b81] text-white font-black text-2xl flex items-center justify-center shadow-md">
@@ -1581,6 +1566,66 @@ export default function App() {
                     </span>
                   </div>
                 </div>
+              </div>
+
+              <div className="bg-blue-50/60 border border-blue-100 p-5 rounded-2xl space-y-1.5 shrink-0">
+                <p className="text-[11px] font-bold text-[#0f4b81] uppercase tracking-wider">Shop Operating Hours</p>
+                <p className="text-xs font-extrabold text-slate-800">{adminProfile.operatingHours}</p>
+                <p className="text-[10px] text-slate-500">Electric Operation • No LPG Utility</p>
+              </div>
+            </div>
+
+            {/* Registered Mobile App Customers Directory */}
+            <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-4">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2.5 bg-blue-50 text-[#0f4b81] rounded-xl">
+                    <Users className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-extrabold text-slate-900">Registered Mobile App Customers</h3>
+                    <p className="text-xs text-slate-500 font-medium">Directory of active accounts synced from the customer mobile application.</p>
+                  </div>
+                </div>
+                <span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-xs font-bold">
+                  {(dashboardData?.users || []).length} Total Customers
+                </span>
+              </div>
+
+              <div className="overflow-x-auto pt-2">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200">
+                    <tr>
+                      <th className="py-3 px-4">User ID</th>
+                      <th className="py-3 px-4">Full Name</th>
+                      <th className="py-3 px-4">Phone Number</th>
+                      <th className="py-3 px-4">Email Address</th>
+                      <th className="py-3 px-4 text-right">Role</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {(dashboardData?.users || []).map((u) => (
+                      <tr key={u.user_id} className="hover:bg-slate-50 transition">
+                        <td className="py-3.5 px-4 font-bold text-[#0f4b81]">#{u.user_id}</td>
+                        <td className="py-3.5 px-4 font-extrabold text-slate-900">{u.full_name}</td>
+                        <td className="py-3.5 px-4 text-slate-600 font-medium">{u.phone_number || 'N/A'}</td>
+                        <td className="py-3.5 px-4 text-slate-600 font-medium">{u.email || 'N/A'}</td>
+                        <td className="py-3.5 px-4 text-right">
+                          <span className="px-2.5 py-0.5 bg-blue-50 text-[#0f4b81] rounded-full text-[10px] font-bold uppercase">
+                            {u.role || 'customer'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {(!dashboardData?.users || dashboardData.users.length === 0) && (
+                      <tr>
+                        <td colSpan="5" className="py-10 text-center text-slate-400 font-medium">
+                          No registered mobile customers found yet.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
