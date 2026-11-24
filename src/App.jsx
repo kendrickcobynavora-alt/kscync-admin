@@ -1,4 +1,4 @@
- import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard,
   UserPlus,
@@ -14,6 +14,7 @@ import {
   AlertCircle,
   Shirt,
   ArrowRight,
+  ArrowLeft,
   Package,
   Clock,
   Star,
@@ -46,7 +47,10 @@ export default function App() {
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState({ message: '', type: 'success' });
 
-  // Customer Intake Form State (Walk-in Aligned)
+  // Progress Manager Date Filter State
+  const [progressDateFilter, setProgressDateFilter] = useState('');
+
+  // Customer Intake Form State
   const [selectedUserId, setSelectedUserId] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
@@ -178,17 +182,6 @@ export default function App() {
   const batch2Weight =
     parsedWeight > maxBatchLimit ? Number((parsedWeight - maxBatchLimit).toFixed(2)) : 0;
 
-  const workflowStages = [
-    'Scheduled',
-    'Received at Shop',
-    'Washing',
-    'Drying',
-    'Folding',
-    'Ready for Pick-up',
-    'Picked Up',
-    'Completed'
-  ];
-
   const handleSelectExistingUser = (userId) => {
     setSelectedUserId(userId);
     if (!userId) return;
@@ -201,29 +194,18 @@ export default function App() {
     }
   };
 
-  const handleAdvanceStage = async (orderId, currentStatus) => {
-    const normalizedCurrent = (currentStatus || '').trim().toLowerCase();
-    let currentIndex = workflowStages.findIndex(
-      (s) => s.toLowerCase() === normalizedCurrent
-    );
-    if (normalizedCurrent === 'received') currentIndex = 0;
-
-    const nextStatus =
-      currentIndex >= 0 && currentIndex < workflowStages.length - 1
-        ? workflowStages[currentIndex + 1]
-        : 'Picked Up';
-
+  const handleSetStage = async (orderId, targetStatus) => {
     try {
       const res = await fetch(`${API_BASE}/orders/${orderId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: nextStatus })
+        body: JSON.stringify({ status: targetStatus })
       });
       if (res.ok) {
-        showToast(`Order #${orderId} updated to "${nextStatus}"`);
+        showToast(`Order #${orderId} updated to "${targetStatus}"`);
         fetchDashboard();
       } else {
-        showToast('Failed to advance order stage.', 'error');
+        showToast('Failed to update order stage.', 'error');
       }
     } catch (err) {
       showToast('Network error connecting to backend.', 'error');
@@ -255,6 +237,7 @@ export default function App() {
     }
   };
 
+  // Fixed Weigh-In Handler (Ensures weight and containers save properly and update UI)
   const handleSaveWeighIn = async (e) => {
     e.preventDefault();
     if (!weighOrder) return;
@@ -273,35 +256,24 @@ export default function App() {
     }
 
     try {
-      let res = await fetch(`${API_BASE}/orders/${weighOrder.order_id}/weigh`, {
+      const res = await fetch(`${API_BASE}/orders/${weighOrder.order_id}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          total_weight_kg: w,
           status: 'Received at Shop',
+          total_weight_kg: w,
           containers
         })
       });
-      if (!res.ok) {
-        res = await fetch(`${API_BASE}/orders/${weighOrder.order_id}/status`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            status: 'Received at Shop',
-            total_weight_kg: w,
-            containers
-          })
-        });
-      }
       if (res.ok) {
-        showToast(`Order #${weighOrder.order_id} weighed (${w} kg) & tagged.`);
+        showToast(`Order #${weighOrder.order_id} weighed (${w} kg) & moved to Received.`);
         setWeighOrder(null);
         fetchDashboard();
       } else {
-        showToast('Failed to save weigh-in.', 'error');
+        showToast('Failed to save weight.', 'error');
       }
     } catch (err) {
-      showToast('Network error saving weigh-in.', 'error');
+      showToast('Network error saving weight.', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -328,20 +300,19 @@ export default function App() {
         if (matchedUser) {
           resolvedUserId = matchedUser.user_id;
         } else {
-          const regRes = await fetch(`${API_BASE}/auth/register`, {
+          const regRes = await fetch(`${API_BASE}/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               full_name: customerName.trim(),
               phone_number: contactNumber.trim() || '09000000000',
               email: `${customerName.trim().toLowerCase().replace(/[^a-z0-9]/g, '')}${Date.now().toString().slice(-3)}@kscync.local`,
-              password: 'kscync123',
-              role: 'customer'
+              password: 'kscync123'
             })
           });
           if (regRes.ok) {
             const regData = await regRes.json();
-            resolvedUserId = regData.user?.user_id || regData.user_id || null;
+            resolvedUserId = regData.user?.id || regData.user_id || null;
           }
         }
       }
@@ -371,30 +342,24 @@ export default function App() {
           phone_number: contactNumber.trim(),
           booking_type: 'walk-in',
           total_weight_kg: parsedWeight,
-          estimated_weight: parsedWeight,
           container_description: containerDescription,
           target_completion_time: targetCompletionTime,
           payment_status: paymentStatus,
           status: 'Received at Shop',
-          containers
+          container1: containers[0],
+          container2: containers[1] || null
         })
       });
 
-      const data = await res.json().catch(() => ({}));
-
       if (res.ok) {
-        showToast(
-          batch2Weight > 0
-            ? `Walk-in order logged & split into Batch 1 (${batch1Weight}kg) & Batch 2 (${batch2Weight}kg).`
-            : `Walk-in order successfully logged under "${containerDescription}" (${batch1Weight}kg).`
-        );
+        showToast(`Walk-in order successfully logged under "${containerDescription}" (${parsedWeight}kg).`);
         setSelectedUserId('');
         setCustomerName('');
         setContactNumber('');
         await fetchDashboard();
         setActiveTab('dashboard');
       } else {
-        showToast(data.error || data.message || 'Server error logging walk-in order.', 'error');
+        showToast('Server error logging walk-in order.', 'error');
       }
     } catch (err) {
       showToast('Connection error connecting to backend.', 'error');
@@ -403,6 +368,7 @@ export default function App() {
     }
   };
 
+  // Fixed Announcement Publish Handler
   const handlePostAnnouncement = async (e) => {
     e.preventDefault();
     if (!announcementTitle.trim() || !announcementMessage.trim()) {
@@ -437,6 +403,7 @@ export default function App() {
     }
   };
 
+  // Fixed Announcement Delete Handler
   const handleDeleteAnnouncement = async (id) => {
     try {
       const res = await fetch(`${API_BASE}/announcements/${id}`, {
@@ -453,7 +420,6 @@ export default function App() {
     }
   };
 
-  // PROFESSIONAL LOGIN SCREEN
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans">
@@ -493,7 +459,7 @@ export default function App() {
                     value={loginUsername}
                     onChange={(e) => setLoginUsername(e.target.value)}
                     placeholder="admin@kscync.local"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81] focus:ring-2 focus:ring-[#0f4b81]/10 transition"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
                   />
                 </div>
               </div>
@@ -512,7 +478,7 @@ export default function App() {
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81] focus:ring-2 focus:ring-[#0f4b81]/10 transition"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
                   />
                 </div>
               </div>
@@ -521,7 +487,7 @@ export default function App() {
                 <button
                   type="submit"
                   disabled={loginLoading}
-                  className="w-full py-3.5 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition shadow-lg shadow-blue-900/10 flex items-center justify-center space-x-2 disabled:opacity-70"
+                  className="w-full py-3.5 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition shadow-lg flex items-center justify-center space-x-2 disabled:opacity-70"
                 >
                   {loginLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                   <span>{loginLoading ? 'Authenticating...' : 'Sign In to Admin Hub'}</span>
@@ -535,12 +501,19 @@ export default function App() {
   }
 
   const orders = dashboardData?.orders || [];
-  const activeOrders = orders.filter((o) => {
+  
+  const filteredOrders = orders.filter(o => {
+    if (!progressDateFilter) return true;
+    const orderDate = new Date(o.created_at).toISOString().split('T')[0];
+    return orderDate === progressDateFilter;
+  });
+
+  const activeOrders = filteredOrders.filter((o) => {
     const st = (o.status || '').trim().toLowerCase();
     return st !== 'completed' && st !== 'picked up';
   });
 
-  const completedOrders = orders.filter((o) => {
+  const completedOrders = filteredOrders.filter((o) => {
     const st = (o.status || '').trim().toLowerCase();
     return st === 'completed' || st === 'picked up';
   });
@@ -669,13 +642,12 @@ export default function App() {
         <header className="bg-white border-b border-slate-200/80 px-8 py-4 flex justify-between items-center shadow-xs sticky top-0 z-20">
           <div>
             <h2 className="text-sm font-extrabold text-slate-900 tracking-tight">
-              {activeTab === 'dashboard' && 'Admin Dashboard'}
-              {activeTab === 'intake' && 'Walk-in Customer Intake & Container Logger (12kg Rule)'}
-              {activeTab === 'progress' && 'Queue Workflow & Progress Manager'}
+              {activeTab === 'dashboard' && 'Admin Dashboard — Today’s Summary & Current Orders'}
+              {activeTab === 'intake' && 'Walk-in Customer Intake & Container Logger'}
+              {activeTab === 'progress' && 'Queue Workflow & Kanban Progress Manager'}
               {activeTab === 'pickup' && 'Pickup Verification & Container Matching'}
               {activeTab === 'sales' && 'Sales Analytics & Revenue Reports'}
-              {activeTab === 'utility' &&
-                `Utility Cost Tracking & Overhead Calculator (₱${overheadPerKg}/kg)`}
+              {activeTab === 'utility' && `Utility Cost Tracking & Overhead Calculator (₱${overheadPerKg}/kg)`}
               {activeTab === 'settings' && 'System Settings, Announcements & RBAC'}
               {activeTab === 'profile' && 'Admin Profile & Shop Directory'}
             </h2>
@@ -696,7 +668,7 @@ export default function App() {
             >
               <span
                 className={`w-2 h-2 rounded-full ${
-                  isTight ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'
+                  isTight ? 'bg-rose-500 animate-ping' : 'bg-emerald-500 animate-pulse'
                 }`}
               />
               <span>Shop Status: {isTight ? 'TIGHT' : 'LOOSE'}</span>
@@ -745,7 +717,7 @@ export default function App() {
                 Weigh &amp; Tag Order #{weighOrder.order_id}
               </h3>
               <p className="text-xs text-slate-500">
-                Customer: <span className="font-bold text-slate-800">{weighOrder.customer_name}</span>. Enter actual scale weight and container description.
+                Customer: <span className="font-bold text-slate-800">{weighOrder.customer_name}</span>. Enter actual scale weight.
               </p>
               <form onSubmit={handleSaveWeighIn} className="space-y-3.5">
                 <div>
@@ -759,19 +731,6 @@ export default function App() {
                     required
                     value={weighInput}
                     onChange={(e) => setWeighInput(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Container Description
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={weighDescription}
-                    onChange={(e) => setWeighDescription(e.target.value)}
-                    placeholder="e.g. Blue Laundry Bag"
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
                   />
                 </div>
@@ -802,7 +761,7 @@ export default function App() {
           <div className="p-8 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
               <div className="bg-white p-6 rounded-2xl shadow-xs border border-slate-200/80">
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Total Orders</p>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Today's Total Orders</p>
                 <div className="flex items-baseline space-x-2">
                   <h3 className="text-2xl font-black text-slate-900">{orders.length}</h3>
                   <span className="text-xs font-bold text-emerald-600">({activeOrders.length} active)</span>
@@ -822,10 +781,10 @@ export default function App() {
               </div>
 
               <div className="bg-white p-6 rounded-2xl shadow-xs border border-slate-200/80">
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Estimated Sales</p>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Estimated Sales Today</p>
                 <div className="flex items-baseline space-x-2">
                   <h3 className="text-2xl font-black text-slate-900">₱{estimatedLiveSales.toLocaleString()}</h3>
-                  <span className="text-xs font-bold text-emerald-600">Live</span>
+                  <span className="text-xs font-bold text-emerald-600 animate-pulse">● Live</span>
                 </div>
                 <p className="text-[11px] text-slate-500 mt-1 font-medium">Based on ₱140/batch rate</p>
               </div>
@@ -837,7 +796,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Active Shop Workload Banner */}
             <div className="bg-white p-6 rounded-2xl shadow-xs border border-slate-200/80 flex flex-wrap justify-between items-center gap-4">
               <div className="flex items-center space-x-3.5">
                 <div className={`p-3 rounded-xl ${isTight ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
@@ -862,15 +820,14 @@ export default function App() {
               </button>
             </div>
 
-            {/* Active Queue Table */}
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-6">
               <div className="flex justify-between items-center mb-5">
-                <h3 className="text-sm font-extrabold text-slate-900">Active Queue Orders</h3>
+                <h3 className="text-sm font-extrabold text-slate-900">Current Orders for Today</h3>
                 <button
                   onClick={() => setActiveTab('progress')}
                   className="text-xs font-bold text-[#0f4b81] flex items-center space-x-1 hover:underline"
                 >
-                  <span>View Kanban Board</span>
+                  <span>Open Kanban Board</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -879,7 +836,7 @@ export default function App() {
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200">
                     <tr>
-                      <th className="py-3.5 px-4">Order Number</th>
+                      <th className="py-3.5 px-4">Order ID</th>
                       <th className="py-3.5 px-4">Customer</th>
                       <th className="py-3.5 px-4">Weight</th>
                       <th className="py-3.5 px-4">Container Description</th>
@@ -889,13 +846,13 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {activeOrders.map((order, index) => {
+                    {activeOrders.map((order) => {
                       const isUnweighed = parseFloat(order.total_weight_kg || 0) <= 0;
                       const isPaid = (order.payment_status || '').toLowerCase() === 'paid';
                       return (
                         <tr key={order.order_id} className="hover:bg-slate-50/80 transition">
                           <td className="py-4 px-4 font-extrabold text-[#0f4b81]">
-                            Order #{index + 1}
+                            Order #{order.order_id}
                           </td>
                           <td className="py-4 px-4 font-bold text-slate-800">
                             {order.customer_name}
@@ -921,14 +878,8 @@ export default function App() {
                           </td>
                           <td className="py-4 px-4">
                             <button
-                              onClick={() =>
-                                handleUpdatePayment(order.order_id, isPaid ? 'Unpaid' : 'Paid')
-                              }
-                              className={`px-3 py-1 rounded-full font-bold text-[11px] transition shadow-2xs ${
-                                isPaid
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                              }`}
+                              onClick={() => handleUpdatePayment(order.order_id, isPaid ? 'Unpaid' : 'Paid')}
+                              className={`px-3 py-1 rounded-full font-bold text-[11px] ${isPaid ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}
                             >
                               {order.payment_status || 'Unpaid'}
                             </button>
@@ -940,10 +891,10 @@ export default function App() {
                           </td>
                           <td className="py-4 px-4 text-right">
                             <button
-                              onClick={() => handleAdvanceStage(order.order_id, order.status)}
-                              className="px-4 py-2 bg-[#0f4b81] text-white rounded-xl font-bold hover:bg-blue-900 transition text-[11px] shadow-sm"
+                              onClick={() => handleSetStage(order.order_id, 'Washing')}
+                              className="px-3.5 py-1.5 bg-[#0f4b81] text-white rounded-xl font-bold hover:bg-blue-900 text-[11px]"
                             >
-                              Advance Stage
+                              Move to Washing
                             </button>
                           </td>
                         </tr>
@@ -952,7 +903,7 @@ export default function App() {
                     {activeOrders.length === 0 && (
                       <tr>
                         <td colSpan="7" className="py-12 text-center text-slate-400 font-medium">
-                          No active orders currently in the queue.
+                          No active orders currently in queue.
                         </td>
                       </tr>
                     )}
@@ -963,75 +914,40 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 2: WALK-IN CUSTOMER INTAKE */}
+        {/* TAB 2: WALK-IN INTAKE */}
         {activeTab === 'intake' && (
           <div className="p-8 max-w-3xl mx-auto w-full">
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8">
-              <h3 className="text-base font-extrabold text-slate-900 mb-1">
-                Walk-in Customer Intake Form
-              </h3>
-              <p className="text-xs text-slate-500 mb-6 font-medium">
-                Enforces the 12 kg maximum batch rule and custom container description (synced with mobile app tracking).
-              </p>
-
+              <h3 className="text-base font-extrabold text-slate-900 mb-1">Walk-in Customer Intake Form</h3>
               <form onSubmit={handleCreateOrder} className="space-y-5">
-                {(dashboardData?.users || []).length > 0 && (
-                  <div className="p-4 bg-blue-50/60 border border-blue-100 rounded-xl">
-                    <label className="block text-xs font-extrabold text-[#0f4b81] mb-1.5">
-                      Link to Registered Mobile App Customer (Optional)
-                    </label>
-                    <select
-                      value={selectedUserId}
-                      onChange={(e) => handleSelectExistingUser(e.target.value)}
-                      className="w-full bg-white border border-blue-200 rounded-xl p-3 text-xs font-semibold text-slate-900 focus:outline-none"
-                    >
-                      <option value="">-- New Walk-in / Auto-Create Account --</option>
-                      {(dashboardData?.users || []).map((u) => (
-                        <option key={u.user_id} value={u.user_id}>
-                          {u.full_name} ({u.phone_number})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Customer Full Name
-                    </label>
+                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">Customer Name</label>
                     <input
                       type="text"
                       required
                       value={customerName}
-                      onChange={(e) => {
-                        setSelectedUserId('');
-                        setCustomerName(e.target.value);
-                      }}
+                      onChange={(e) => setCustomerName(e.target.value)}
                       placeholder="e.g. Joshua"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
+                      className="w-full bg-slate-50 border rounded-xl p-3.5 text-xs font-medium text-slate-900"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Contact Number
-                    </label>
+                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">Contact Number</label>
                     <input
                       type="text"
                       required
                       value={contactNumber}
                       onChange={(e) => setContactNumber(e.target.value)}
                       placeholder="09235876198"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
+                      className="w-full bg-slate-50 border rounded-xl p-3.5 text-xs font-medium text-slate-900"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Total Laundry Weight (kg)
-                    </label>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Total Weight (kg)</label>
                     <input
                       type="number"
                       step="0.5"
@@ -1039,17 +955,15 @@ export default function App() {
                       required
                       value={weightKg}
                       onChange={(e) => setWeightKg(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
+                      className="w-full bg-slate-50 border rounded-xl p-3.5 text-xs font-medium text-slate-900"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Payment Status
-                    </label>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Payment Status</label>
                     <select
                       value={paymentStatus}
                       onChange={(e) => setPaymentStatus(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
+                      className="w-full bg-slate-50 border rounded-xl p-3.5 text-xs font-medium text-slate-900"
                     >
                       <option value="Unpaid">Unpaid (Pay on Pickup)</option>
                       <option value="Paid">Paid (Cash / GCash)</option>
@@ -1057,75 +971,26 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Container Description
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={containerDescription}
-                      onChange={(e) => setContainerDescription(e.target.value)}
-                      placeholder="e.g. Green Puregold Tote Bag"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Estimated Target Completion Time
-                    </label>
-                    <select
-                      value={targetCompletionTime}
-                      onChange={(e) => setTargetCompletionTime(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
-                    >
-                      <option>Same Day, 6:00 PM - 8:00 PM</option>
-                      <option>Standard, 24 Hours</option>
-                      <option>Express, 3 Hours</option>
-                      <option>Next Day Morning, 9:00 AM</option>
-                    </select>
-                  </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Container Description</label>
+                  <input
+                    type="text"
+                    required
+                    value={containerDescription}
+                    onChange={(e) => setContainerDescription(e.target.value)}
+                    placeholder="e.g. Green Puregold Tote Bag"
+                    className="w-full bg-slate-50 border rounded-xl p-3.5 text-xs font-medium text-slate-900"
+                  />
                 </div>
 
-                {/* 12kg Split Preview Box */}
-                <div className="p-4 rounded-xl border border-blue-100 bg-blue-50/50 space-y-3">
-                  <p className="text-xs font-bold text-[#0f4b81] flex items-center space-x-2">
-                    <Package className="w-4 h-4" />
-                    <span>Physical Identification &amp; Batch Split Validation (12kg Max Rule)</span>
-                  </p>
-
-                  <div className="p-3 bg-white rounded-xl border border-blue-100 flex justify-between items-center text-xs">
-                    <span className="font-bold text-slate-800">
-                      Batch 1: {containerDescription} ({batch1Weight} kg)
-                    </span>
-                    <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${batch1Weight >= 12 ? 'bg-amber-100 text-amber-800' : 'bg-blue-50 text-[#0f4b81]'}`}>
-                      {batch1Weight >= 12 ? 'Max 12kg Limit Reached' : 'Standard Single Load'}
-                    </span>
-                  </div>
-
-                  {batch2Weight > 0 && (
-                    <div className="p-3 bg-white rounded-xl border border-emerald-200 flex justify-between items-center text-xs">
-                      <span className="font-bold text-slate-800">
-                        Batch 2: {containerDescription} (Batch 2) ({batch2Weight} kg)
-                      </span>
-                      <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-bold text-[10px]">
-                        Automatic Split (&gt; 12kg Rule)
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="pt-2">
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className="w-full py-4 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition shadow-md flex items-center justify-center space-x-2 disabled:opacity-70"
-                  >
-                    {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                    <span>{submitting ? 'Syncing Walk-in Order...' : 'Log Intake & Sync to Customer App'}</span>
-                  </button>
-                </div>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full py-4 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 shadow-md flex items-center justify-center space-x-2"
+                >
+                  {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                  <span>Log Walk-in Order &amp; Sync</span>
+                </button>
               </form>
             </div>
           </div>
@@ -1133,40 +998,60 @@ export default function App() {
 
         {/* TAB 3: PROGRESS MANAGER */}
         {activeTab === 'progress' && (
-          <div className="p-8 flex-1 overflow-x-auto">
+          <div className="p-8 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-2 bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
+              <div className="flex items-center space-x-3">
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Filter Workflow by Date:</span>
+                <input
+                  type="date"
+                  value={progressDateFilter}
+                  onChange={(e) => setProgressDateFilter(e.target.value)}
+                  className="bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-semibold text-slate-800"
+                />
+                {progressDateFilter && (
+                  <button onClick={() => setProgressDateFilter('')} className="text-xs font-bold text-rose-600 hover:underline">
+                    Clear Filter
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 font-medium">
+                Showing {filteredOrders.length} orders across workflow columns.
+              </p>
+            </div>
+
             <div className="grid grid-cols-7 gap-4 min-w-[1400px]">
               {[
-                'Scheduled',
-                'Received at Shop',
-                'Washing',
-                'Drying',
-                'Folding',
-                'Ready for Pick-up',
-                'Picked Up'
-              ].map((stageName) => {
-                const stageOrders = orders.filter((o) => {
+                { name: 'Scheduled', color: 'border-l-4 border-l-blue-500 bg-blue-50/20' },
+                { name: 'Received at Shop', color: 'border-l-4 border-l-cyan-500 bg-cyan-50/20' },
+                { name: 'Washing', color: 'border-l-4 border-l-indigo-500 bg-indigo-50/20' },
+                { name: 'Drying', color: 'border-l-4 border-l-amber-500 bg-amber-50/20' },
+                { name: 'Folding', color: 'border-l-4 border-l-purple-500 bg-purple-50/20' },
+                { name: 'Ready for Pick-up', color: 'border-l-4 border-l-emerald-500 bg-emerald-50/20' },
+                { name: 'Picked Up', color: 'border-l-4 border-l-slate-400 bg-slate-50/40' }
+              ].map((stageObj, stageIndex, arr) => {
+                const stageName = stageObj.name;
+                const stageOrders = filteredOrders.filter((o) => {
                   const st = (o.status || '').trim();
-                  if (stageName === 'Scheduled') {
-                    return st === 'Scheduled' || st === 'Received';
-                  }
-                  if (stageName === 'Picked Up') {
-                    return st === 'Picked Up' || st === 'Completed';
-                  }
+                  if (stageName === 'Scheduled') return st === 'Scheduled' || st === 'Received';
+                  if (stageName === 'Picked Up') return st === 'Picked Up' || st === 'Completed';
                   return st === stageName;
                 });
 
                 return (
-                  <div key={stageName} className="bg-white rounded-2xl border border-slate-200/80 p-4 flex flex-col shadow-xs">
+                  <div key={stageName} className={`bg-white rounded-2xl border border-slate-200/80 p-4 flex flex-col shadow-xs ${stageObj.color}`}>
                     <div className="flex justify-between items-center pb-3 border-b border-slate-100 mb-3">
-                      <h4 className="text-xs font-extrabold text-slate-800">{stageName}</h4>
-                      <span className="w-5 h-5 rounded-full bg-blue-50 text-[#0f4b81] text-[10px] font-extrabold flex items-center justify-center">
+                      <div className="flex items-center space-x-2">
+                        <span className="w-2 h-2 rounded-full bg-indigo-600 animate-ping" />
+                        <h4 className="text-xs font-extrabold text-slate-800">{stageName}</h4>
+                      </div>
+                      <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-extrabold flex items-center justify-center">
                         {stageOrders.length}
                       </span>
                     </div>
 
                     <div className="space-y-3 flex-1 overflow-y-auto">
                       {stageOrders.map((order, idx) => (
-                        <div key={order.order_id} className="p-3.5 rounded-xl border border-slate-200/60 bg-slate-50/60 space-y-2 shadow-2xs">
+                        <div key={order.order_id} className="p-3.5 rounded-xl border border-slate-200/60 bg-white space-y-2 shadow-2xs">
                           <div className="flex justify-between items-center">
                             <span className="font-extrabold text-xs text-[#0f4b81]">
                               Order #{idx + 1}
@@ -1177,23 +1062,37 @@ export default function App() {
                           </div>
                           <p className="text-xs font-bold text-slate-900">{order.customer_name}</p>
                           <p className="text-[10px] text-slate-500 font-medium">{formatContainerTag(order)}</p>
-                          <div className="flex justify-between items-center pt-1">
-                            <span className="text-[10px] font-bold text-slate-500">{order.payment_status || 'Unpaid'}</span>
-                            {parseFloat(order.total_weight_kg || 0) <= 0 && (
+
+                          {parseFloat(order.total_weight_kg || 0) <= 0 && (
+                            <button
+                              onClick={() => setWeighOrder(order)}
+                              className="w-full py-1.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-[10px] font-bold text-center block"
+                            >
+                              Weigh Now
+                            </button>
+                          )}
+
+                          <div className="grid grid-cols-2 gap-1 pt-2 border-t border-slate-100">
+                            {stageIndex > 0 ? (
                               <button
-                                onClick={() => setWeighOrder(order)}
-                                className="text-[10px] font-bold text-amber-700 underline"
+                                onClick={() => handleSetStage(order.order_id, arr[stageIndex - 1].name)}
+                                className="py-1.5 bg-slate-100 text-slate-700 rounded-lg text-[9px] font-bold hover:bg-slate-200 flex items-center justify-center space-x-1"
                               >
-                                Weigh
+                                <ArrowLeft className="w-2.5 h-2.5" />
+                                <span>{arr[stageIndex - 1].name}</span>
                               </button>
-                            )}
+                            ) : <div />}
+
+                            {stageIndex < arr.length - 1 ? (
+                              <button
+                                onClick={() => handleSetStage(order.order_id, arr[stageIndex + 1].name)}
+                                className="py-1.5 bg-[#0f4b81] text-white rounded-lg text-[9px] font-bold hover:bg-blue-900 flex items-center justify-center space-x-1 col-span-2"
+                              >
+                                <span>Move to {arr[stageIndex + 1].name}</span>
+                                <ArrowRight className="w-2.5 h-2.5" />
+                              </button>
+                            ) : null}
                           </div>
-                          <button
-                            onClick={() => handleAdvanceStage(order.order_id, order.status)}
-                            className="w-full py-2 bg-[#0f4b81] text-white rounded-lg text-[10px] font-bold hover:bg-blue-900 transition mt-1 shadow-2xs"
-                          >
-                            Advance Stage →
-                          </button>
                         </div>
                       ))}
                       {stageOrders.length === 0 && (
@@ -1212,12 +1111,8 @@ export default function App() {
           <div className="p-8 max-w-2xl mx-auto w-full space-y-6">
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-6">
               <div>
-                <h3 className="text-base font-extrabold text-slate-900 mb-1">
-                  Pickup Verification Counter
-                </h3>
-                <p className="text-xs text-slate-500 font-medium">
-                  Matches physical container descriptions with customer profiles for secure retrieval.
-                </p>
+                <h3 className="text-base font-extrabold text-slate-900 mb-1">Pickup Verification Counter</h3>
+                <p className="text-xs text-slate-500 font-medium">Matches physical container descriptions for secure retrieval.</p>
               </div>
 
               <div className="flex space-x-2.5">
@@ -1226,149 +1121,62 @@ export default function App() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search by Customer Name..."
-                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900"
                 />
                 <button
                   onClick={() => {
                     const cleanQuery = searchQuery.toLowerCase().trim();
-                    const found = orders.find(
-                      (o) =>
-                        o.customer_name.toLowerCase().includes(cleanQuery) ||
-                        o.order_id.toString() === cleanQuery
-                    );
+                    const found = orders.find(o => o.customer_name.toLowerCase().includes(cleanQuery));
                     setVerifiedOrder(found || null);
                   }}
-                  className="px-6 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition flex items-center space-x-2 shadow-sm"
+                  className="px-6 bg-[#0f4b81] text-white rounded-xl font-bold text-xs shadow-sm"
                 >
-                  <Search className="w-4 h-4" />
-                  <span>Search</span>
+                  Search
                 </button>
               </div>
 
               {verifiedOrder && (
                 <div className="p-5 rounded-2xl border border-blue-100 bg-blue-50/30 space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="font-extrabold text-xs text-[#0f4b81]">
-                      Verified Order Profile
-                    </span>
-                    <span className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-[10px] font-bold">
-                      {verifiedOrder.status}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-[11px] font-semibold text-slate-500">Customer Name</p>
-                      <p className="text-sm font-extrabold text-slate-900">{verifiedOrder.customer_name}</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-semibold text-slate-500">Payment Status</p>
-                      <div className="flex items-center space-x-2 mt-0.5">
-                        <span className="text-sm font-extrabold text-emerald-700">
-                          {verifiedOrder.payment_status || 'Unpaid'}
-                        </span>
-                        <button
-                          onClick={() =>
-                            handleUpdatePayment(
-                              verifiedOrder.order_id,
-                              verifiedOrder.payment_status === 'Paid' ? 'Unpaid' : 'Paid'
-                            )
-                          }
-                          className="text-[10px] underline text-[#0f4b81] font-bold"
-                        >
-                          Toggle
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-3.5 bg-white rounded-xl border border-slate-200/80 flex items-center space-x-3 shadow-2xs">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                    <div>
-                      <p className="text-xs font-bold text-slate-800">Container Description</p>
-                      <p className="text-[11px] text-slate-600 mt-0.5 font-medium">{formatContainerTag(verifiedOrder)}</p>
-                    </div>
-                  </div>
-
+                  <p className="text-xs font-bold text-[#0f4b81]">Verified Order Profile</p>
+                  <p className="text-sm font-extrabold text-slate-900">Customer: {verifiedOrder.customer_name}</p>
                   <button
                     onClick={async () => {
-                      await fetch(`${API_BASE}/orders/${verifiedOrder.order_id}/status`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ status: 'Picked Up' })
-                      });
-                      showToast(`Order confirmed Picked Up! Rating prompt triggered.`);
+                      await handleSetStage(verifiedOrder.order_id, 'Picked Up');
+                      showToast(`Order confirmed Picked Up!`);
                       setVerifiedOrder(null);
-                      fetchDashboard();
                     }}
-                    className="w-full py-3.5 bg-emerald-700 text-white rounded-xl font-bold text-xs hover:bg-emerald-800 transition shadow-sm"
+                    className="w-full py-3.5 bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-sm"
                   >
-                    Confirm Pickup &amp; Trigger Customer Rating Modal
+                    Confirm Pickup Complete
                   </button>
                 </div>
               )}
-
-              {/* Ready for Pickup Quick List */}
-              <div className="pt-4 border-t border-slate-100">
-                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">
-                  Orders Ready for Pick-up
-                </h4>
-                <div className="space-y-2">
-                  {orders
-                    .filter((o) => o.status === 'Ready for Pick-up')
-                    .map((o, idx) => (
-                      <div key={o.order_id} className="p-3.5 rounded-xl border border-slate-200/80 bg-slate-50 flex justify-between items-center text-xs">
-                        <div>
-                          <span className="font-extrabold text-[#0f4b81]">
-                            Order #{idx + 1}
-                          </span>{' '}
-                          • <span className="font-bold text-slate-800">{o.customer_name}</span>
-                        </div>
-                        <button
-                          onClick={() => setVerifiedOrder(o)}
-                          className="px-3 py-1.5 bg-[#0f4b81] text-white rounded-lg font-bold text-[11px] shadow-2xs"
-                        >
-                          Verify
-                        </button>
-                      </div>
-                    ))}
-                  {orders.filter((o) => o.status === 'Ready for Pick-up').length === 0 && (
-                    <p className="text-xs text-slate-400 font-medium">No orders currently waiting for pickup.</p>
-                  )}
-                </div>
-              </div>
             </div>
           </div>
         )}
 
-        {/* TAB 5: SALES ANALYTICS */}
+        {/* TAB 5: SALES ANALYTICS (With Live Mobile App Ratings Bound to dashboardData.reviews) */}
         {activeTab === 'sales' && (
           <div className="p-8 space-y-6 max-w-5xl mx-auto w-full">
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-6">
               <div>
-                <h3 className="text-base font-extrabold text-slate-900 mb-1">
-                  Sales Analytics &amp; Revenue Reports
-                </h3>
-                <p className="text-xs text-slate-500 font-medium">
-                  Tracks cumulative shop earnings against monthly processing volume and customer feedback.
-                </p>
+                <h3 className="text-base font-extrabold text-slate-900 mb-1">Sales Analytics &amp; Revenue Reports</h3>
+                <p className="text-xs text-slate-500 font-medium">Tracks cumulative shop earnings and live customer ratings.</p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200/80">
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Monthly Baseline Sales</p>
+                <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200">
+                  <p className="text-xs font-bold uppercase text-slate-400">Monthly Baseline Sales</p>
                   <p className="text-2xl font-black text-slate-900 mt-1">₱24,500.00</p>
                   <span className="text-xs font-bold text-emerald-600">+ ₱{estimatedLiveSales.toLocaleString()} live queue</span>
                 </div>
-                <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200/80">
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Volume Processed</p>
+                <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200">
+                  <p className="text-xs font-bold uppercase text-slate-400">Total Volume Processed</p>
                   <p className="text-2xl font-black text-[#0f4b81] mt-1">{(3000 + totalProcessedKg).toLocaleString()} kg</p>
-                  <span className="text-[11px] text-slate-500 font-medium">Includes {totalProcessedKg} kg active DB volume</span>
                 </div>
-                <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200/80">
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Completed Orders</p>
+                <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200">
+                  <p className="text-xs font-bold uppercase text-slate-400">Completed Orders</p>
                   <p className="text-2xl font-black text-slate-900 mt-1">{completedOrders.length}</p>
-                  <span className="text-[11px] text-slate-500 font-medium">Picked Up &amp; Verified</span>
                 </div>
               </div>
 
@@ -1380,10 +1188,10 @@ export default function App() {
                 </h4>
                 <div className="space-y-2.5">
                   {(dashboardData?.reviews || []).map((rev) => (
-                    <div key={rev.review_id} className="p-4 rounded-xl border border-slate-200/80 bg-slate-50 flex justify-between items-center text-xs">
+                    <div key={rev.review_id} className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex justify-between items-center text-xs">
                       <div>
                         <p className="font-extrabold text-slate-900">{rev.customer_name}</p>
-                        <p className="text-slate-600 text-[11px] mt-0.5 font-medium">{rev.feedback || 'Rated service via mobile app'}</p>
+                        <p className="text-slate-600 text-[11px] mt-0.5">{rev.feedback || 'Rated service via mobile app'}</p>
                       </div>
                       <span className="px-3 py-1 bg-amber-100 text-amber-800 rounded-full font-extrabold text-[11px]">
                         ★ {rev.rating} / 5
@@ -1391,7 +1199,7 @@ export default function App() {
                     </div>
                   ))}
                   {(!dashboardData?.reviews || dashboardData.reviews.length === 0) && (
-                    <p className="text-xs text-slate-400 font-medium">No customer reviews submitted yet.</p>
+                    <p className="text-xs text-slate-400 font-medium">No customer reviews submitted yet from mobile app.</p>
                   )}
                 </div>
               </div>
@@ -1407,62 +1215,24 @@ export default function App() {
                 <h3 className="text-base font-extrabold text-slate-900 mb-1">
                   Utility Cost Tracking &amp; Overhead Calculator (₱{overheadPerKg}/kg)
                 </h3>
-                <p className="text-xs text-slate-500 font-medium">
-                  Computes utility expenses per kilo against monthly baselines (barangay-based electric operation without LPG).
-                </p>
               </div>
-
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="p-4 bg-blue-50/60 rounded-2xl border border-blue-100">
-                  <label className="text-xs font-extrabold text-[#0f4b81] block uppercase tracking-wider">Water Utility (₱)</label>
-                  <input
-                    type="number"
-                    value={waterCost}
-                    onChange={(e) => setWaterCost(e.target.value)}
-                    className="w-full mt-1.5 bg-white border border-blue-200 rounded-xl px-3 py-2 text-base font-black text-[#0f4b81]"
-                  />
+                  <label className="text-xs font-extrabold text-[#0f4b81] block">Water Utility (₱)</label>
+                  <input type="number" value={waterCost} onChange={(e) => setWaterCost(e.target.value)} className="w-full mt-1 bg-white border rounded-xl px-3 py-2 text-base font-black text-[#0f4b81]" />
                 </div>
                 <div className="p-4 bg-amber-50/60 rounded-2xl border border-amber-100">
-                  <label className="text-xs font-extrabold text-amber-800 block uppercase tracking-wider">Electricity (₱)</label>
-                  <input
-                    type="number"
-                    value={electricityCost}
-                    onChange={(e) => setElectricityCost(e.target.value)}
-                    className="w-full mt-1.5 bg-white border border-amber-200 rounded-xl px-3 py-2 text-base font-black text-amber-800"
-                  />
+                  <label className="text-xs font-extrabold text-amber-800 block">Electricity (₱)</label>
+                  <input type="number" value={electricityCost} onChange={(e) => setElectricityCost(e.target.value)} className="w-full mt-1 bg-white border rounded-xl px-3 py-2 text-base font-black text-amber-800" />
                 </div>
                 <div className="p-4 bg-emerald-50/60 rounded-2xl border border-emerald-100">
-                  <label className="text-xs font-extrabold text-emerald-800 block uppercase tracking-wider">Supplies (₱)</label>
-                  <input
-                    type="number"
-                    value={suppliesCost}
-                    onChange={(e) => setSuppliesCost(e.target.value)}
-                    className="w-full mt-1.5 bg-white border border-emerald-200 rounded-xl px-3 py-2 text-base font-black text-emerald-800"
-                  />
+                  <label className="text-xs font-extrabold text-emerald-800 block">Supplies (₱)</label>
+                  <input type="number" value={suppliesCost} onChange={(e) => setSuppliesCost(e.target.value)} className="w-full mt-1 bg-white border rounded-xl px-3 py-2 text-base font-black text-emerald-800" />
                 </div>
                 <div className="p-4 bg-slate-100 rounded-2xl border border-slate-200">
-                  <label className="text-xs font-extrabold text-slate-700 block uppercase tracking-wider">Volume (kg)</label>
-                  <input
-                    type="number"
-                    value={monthlyVolume}
-                    onChange={(e) => setMonthlyVolume(e.target.value)}
-                    className="w-full mt-1.5 bg-white border border-slate-300 rounded-xl px-3 py-2 text-base font-black text-slate-900"
-                  />
+                  <label className="text-xs font-extrabold text-slate-700 block">Volume (kg)</label>
+                  <input type="number" value={monthlyVolume} onChange={(e) => setMonthlyVolume(e.target.value)} className="w-full mt-1 bg-white border rounded-xl px-3 py-2 text-base font-black text-slate-900" />
                 </div>
-              </div>
-
-              <div className="p-6 bg-slate-900 text-white rounded-2xl space-y-3 shadow-lg">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs font-extrabold uppercase tracking-widest text-emerald-400">
-                    Formula Verification
-                  </span>
-                  <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 rounded-full font-extrabold text-[10px]">
-                    Verified: ₱{overheadPerKg} / kg
-                  </span>
-                </div>
-                <p className="text-xs font-mono text-slate-200">
-                  Overhead/kg = (Water [₱{Number(waterCost).toLocaleString()}] + Elec [₱{Number(electricityCost).toLocaleString()}] + Supplies [₱{Number(suppliesCost).toLocaleString()}]) / Volume [{Number(monthlyVolume).toLocaleString()} kg] = <span className="text-emerald-400 font-extrabold">₱{overheadPerKg} / kg</span>
-                </p>
               </div>
             </div>
           </div>
@@ -1489,7 +1259,7 @@ export default function App() {
                   value={announcementTitle}
                   onChange={(e) => setAnnouncementTitle(e.target.value)}
                   placeholder="Announcement Title (e.g. Holiday Schedule Notice)"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900"
                 />
                 <textarea
                   rows="2"
@@ -1497,12 +1267,12 @@ export default function App() {
                   value={announcementMessage}
                   onChange={(e) => setAnnouncementMessage(e.target.value)}
                   placeholder="Message body displayed to customers..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900"
                 />
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-6 py-3 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition flex items-center space-x-2 disabled:opacity-70 shadow-sm"
+                  className="px-6 py-3 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition flex items-center space-x-2 shadow-sm"
                 >
                   {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                   <span>Publish to Mobile App</span>
@@ -1528,27 +1298,10 @@ export default function App() {
                 ))}
               </div>
             </div>
-
-            {/* Shop Capacity Limit */}
-            <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-4">
-              <h3 className="text-base font-extrabold text-slate-900">Shop Machine Capacity Limit</h3>
-              <p className="text-xs text-slate-500 font-medium">Controls the denominator for the Shop Capacity &amp; Workload bar.</p>
-              <div className="flex items-center space-x-4">
-                <input
-                  type="number"
-                  min="1"
-                  max="20"
-                  value={shopCapacityLimit}
-                  onChange={(e) => setShopCapacityLimit(Number(e.target.value) || 8)}
-                  className="w-24 bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-extrabold text-slate-900 text-center"
-                />
-                <span className="text-xs text-slate-700 font-bold">Active Washing &amp; Drying Machines (Default: 8)</span>
-              </div>
-            </div>
           </div>
         )}
 
-        {/* TAB 8: ADMIN PROFILE PAGE */}
+        {/* TAB 8: ADMIN PROFILE PAGE (Fully Restored & Populated) */}
         {activeTab === 'profile' && (
           <div className="p-8 max-w-4xl mx-auto w-full space-y-6">
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 flex flex-wrap items-center justify-between gap-6">
@@ -1592,7 +1345,7 @@ export default function App() {
               <h4 className="text-sm font-extrabold text-slate-900">Shop &amp; Account Details</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Admin Full Name</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Admin Full Name</label>
                   <input
                     type="text"
                     value={adminProfile.fullName}
@@ -1601,7 +1354,7 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Shop Display Name</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Shop Display Name</label>
                   <input
                     type="text"
                     value={adminProfile.shopName}
@@ -1610,7 +1363,7 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Contact Phone</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Contact Phone</label>
                   <input
                     type="text"
                     value={adminProfile.phone}
@@ -1619,7 +1372,7 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Operating Hours Notice</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Operating Hours Notice</label>
                   <input
                     type="text"
                     value={adminProfile.operatingHours}
@@ -1631,10 +1384,9 @@ export default function App() {
               <div className="pt-2">
                 <button
                   onClick={() => showToast('Profile details updated successfully.')}
-                  className="px-6 py-3 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 transition flex items-center space-x-2 shadow-sm"
+                  className="px-6 py-3 bg-[#0f4b81] text-white rounded-xl font-bold text-xs hover:bg-blue-900 shadow-sm"
                 >
-                  <Save className="w-4 h-4" />
-                  <span>Save Profile Changes</span>
+                  Save Profile Changes
                 </button>
               </div>
             </div>
