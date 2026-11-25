@@ -211,7 +211,6 @@ export default function App() {
     }
   };
 
-  // Fixed Robust Order Stage Update Handler
   const handleSetStage = async (orderId, targetStatus) => {
     try {
       const res = await fetch(`${API_BASE}/orders/${orderId}/status`, {
@@ -627,6 +626,18 @@ export default function App() {
     return 'bg-blue-50 text-[#0f4b81] border border-blue-200/60';
   };
 
+  // Helper to determine the next workflow stage and button label dynamically for Dashboard
+  const getNextStageInfo = (status) => {
+    const st = (status || '').trim();
+    if (st === 'Scheduled' || st === 'Received') return { nextStatus: 'Received at Shop', label: 'Move to Shop' };
+    if (st === 'Received at Shop') return { nextStatus: 'Washing', label: 'Move to Washing' };
+    if (st === 'Washing') return { nextStatus: 'Drying', label: 'Move to Drying' };
+    if (st === 'Drying') return { nextStatus: 'Folding', label: 'Move to Folding' };
+    if (st === 'Folding') return { nextStatus: 'Ready for Pick-up', label: 'Move to Ready' };
+    if (st === 'Ready for Pick-up') return { nextStatus: 'Picked Up', label: 'Confirm Pickup' };
+    return { nextStatus: 'Completed', label: 'Complete' };
+  };
+
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'intake', label: 'Walk-in Intake', icon: UserPlus },
@@ -992,6 +1003,7 @@ export default function App() {
                     {activeOrders.map((order) => {
                       const isUnweighed = parseFloat(order.total_weight_kg || 0) <= 0;
                       const isPaid = (order.payment_status || '').toLowerCase() === 'paid';
+                      const stageInfo = getNextStageInfo(order.status);
                       return (
                         <tr key={order.order_id} className="hover:bg-slate-50/80 transition">
                           <td className="py-4 px-4 font-extrabold text-[#0f4b81]">
@@ -1040,10 +1052,10 @@ export default function App() {
                           </td>
                           <td className="py-4 px-4 text-right">
                             <button
-                              onClick={() => handleSetStage(order.order_id, 'Washing')}
+                              onClick={() => handleSetStage(order.order_id, stageInfo.nextStatus)}
                               className="px-3 py-1.5 bg-[#0f4b81] text-white rounded-xl font-bold hover:bg-blue-900 transition text-[11px] shadow-sm cursor-pointer"
                             >
-                              Move to Washing
+                              {stageInfo.label}
                             </button>
                           </td>
                         </tr>
@@ -1203,7 +1215,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 3: PROGRESS MANAGER (Fixed using true order.order_id) */}
+        {/* TAB 3: PROGRESS MANAGER */}
         {activeTab === 'progress' && (
           <div className="p-8 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-4 mb-2 bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
