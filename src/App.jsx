@@ -1,4 +1,4 @@
- import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard,
   UserPlus,
@@ -49,13 +49,9 @@ export default function App() {
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState({ message: '', type: 'success' });
 
-  // Progress Manager Date Filter State
   const [progressDateFilter, setProgressDateFilter] = useState('');
-
-  // Sales Analytics Timeframe State
   const [salesTimeframe, setSalesTimeframe] = useState('monthly');
 
-  // Customer Intake Form State
   const [selectedUserId, setSelectedUserId] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
@@ -64,27 +60,22 @@ export default function App() {
   const [paymentStatus, setPaymentStatus] = useState('Unpaid');
   const [targetCompletionTime, setTargetCompletionTime] = useState('Same Day, 6:00 PM - 8:00 PM');
 
-  // Weigh-in Modal State
   const [weighOrder, setWeighOrder] = useState(null);
   const [weighInput, setWeighInput] = useState('8');
   const [weighDescription, setWeighDescription] = useState('Blue Laundry Bag');
 
-  // Pickup Verification State
   const [searchQuery, setSearchQuery] = useState('');
   const [verifiedOrder, setVerifiedOrder] = useState(null);
 
-  // Utility Calculator State
   const [waterCost, setWaterCost] = useState(5500);
   const [electricityCost, setElectricityCost] = useState(20000);
   const [suppliesCost, setSuppliesCost] = useState(15000);
   const [monthlyVolume, setMonthlyVolume] = useState(3000);
 
-  // Announcement & Settings State
   const [announcementTitle, setAnnouncementTitle] = useState('');
   const [announcementMessage, setAnnouncementMessage] = useState('');
   const [shopCapacityLimit, setShopCapacityLimit] = useState(8);
 
-  // Editable Admin Profile State
   const [adminProfile, setAdminProfile] = useState(() => {
     const saved = localStorage.getItem('ksc_admin_profile');
     if (saved) {
@@ -103,7 +94,6 @@ export default function App() {
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState(adminProfile);
 
-  // Customer Edit Modal State
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [customerForm, setCustomerForm] = useState({ full_name: '', phone_number: '', email: '' });
 
@@ -307,36 +297,6 @@ export default function App() {
     setSubmitting(true);
 
     try {
-      let resolvedUserId = selectedUserId ? Number(selectedUserId) : null;
-      const existingUsers = dashboardData?.users || [];
-
-      if (!resolvedUserId) {
-        const matchedUser = existingUsers.find(
-          (u) =>
-            (u.full_name || '').trim().toLowerCase() === customerName.trim().toLowerCase() ||
-            (contactNumber.trim() && u.phone_number === contactNumber.trim())
-        );
-        if (matchedUser) {
-          resolvedUserId = matchedUser.user_id;
-        } else {
-          const regRes = await fetch(`${API_BASE}/register`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              full_name: customerName.trim(),
-              phone_number: contactNumber.trim() || '09000000000',
-              email: `${customerName.trim().toLowerCase().replace(/[^a-z0-9]/g, '')}${Date.now().toString().slice(-3)}@kscync.local`,
-              password: 'kscync123',
-              role: 'customer'
-            })
-          });
-          if (regRes.ok) {
-            const regData = await regRes.json();
-            resolvedUserId = regData.user?.user_id || regData.user_id || null;
-          }
-        }
-      }
-
       const containers = [
         {
           basket_number: 1,
@@ -357,13 +317,10 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          user_id: resolvedUserId,
           customer_name: customerName.trim(),
-          phone_number: contactNumber.trim(),
+          phone_number: contactNumber.trim() || '09000000000',
           booking_type: 'walk-in',
           total_weight_kg: parsedWeight,
-          estimated_weight: parsedWeight,
-          container_description: containerDescription,
           target_completion_time: targetCompletionTime,
           payment_status: paymentStatus,
           status: 'Received at Shop',
@@ -626,7 +583,6 @@ export default function App() {
     return 'bg-blue-50 text-[#0f4b81] border border-blue-200/60';
   };
 
-  // Helper to determine the next workflow stage and button label dynamically for Dashboard
   const getNextStageInfo = (status) => {
     const st = (status || '').trim();
     if (st === 'Scheduled' || st === 'Received') return { nextStatus: 'Received at Shop', label: 'Move to Shop' };
@@ -651,7 +607,6 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-[#f8fafc] font-sans text-slate-900 overflow-hidden antialiased">
-      {/* SIDEBAR NAVIGATION */}
       <aside className="w-64 bg-[#0f4b81] text-white flex flex-col justify-between shadow-2xl shrink-0">
         <div>
           <div className="p-6 border-b border-white/10 flex items-center space-x-3">
@@ -686,7 +641,6 @@ export default function App() {
           </nav>
         </div>
 
-        {/* Sidebar Footer */}
         <div className="p-4 border-t border-white/10 bg-black/10 space-y-2">
           <button
             onClick={() => setActiveTab('profile')}
@@ -715,9 +669,7 @@ export default function App() {
         </div>
       </aside>
 
-      {/* MAIN CONTENT AREA */}
       <main className="flex-1 flex flex-col overflow-y-auto relative bg-slate-50">
-        {/* TOP HEADER */}
         <header className="bg-white border-b border-slate-200/80 px-8 py-4 flex justify-between items-center shadow-xs sticky top-0 z-20">
           <div>
             <h2 className="text-sm font-extrabold text-slate-900 tracking-tight">
@@ -762,7 +714,6 @@ export default function App() {
           </div>
         </header>
 
-        {/* TOAST NOTIFICATION */}
         {toast.message && (
           <div
             className={`mx-8 mt-4 px-4 py-3 rounded-xl shadow-lg flex items-center justify-between text-xs font-bold ${
@@ -788,10 +739,9 @@ export default function App() {
           </div>
         )}
 
-        {/* WEIGH-IN MODAL */}
         {weighOrder && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-3xl p-7 max-w-md w-full shadow-2xl border border-slate-100 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="bg-white rounded-3xl p-7 max-w-md w-full shadow-2xl border border-slate-100 space-y-4">
               <h3 className="text-base font-black text-slate-900">
                 Weigh &amp; Tag Order #{weighOrder.order_id}
               </h3>
@@ -848,7 +798,6 @@ export default function App() {
           </div>
         )}
 
-        {/* CUSTOMER EDIT MODAL */}
         {editingCustomer && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-3xl p-7 max-w-md w-full shadow-2xl border border-slate-100 space-y-4">
@@ -906,7 +855,6 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 1: DASHBOARD */}
         {activeTab === 'dashboard' && (
           <div className="p-8 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
@@ -994,6 +942,7 @@ export default function App() {
                       <th className="py-3.5 px-4">Customer</th>
                       <th className="py-3.5 px-4">Weight</th>
                       <th className="py-3.5 px-4">Container Description</th>
+                      <th className="py-3.5 px-4">Est. Completion</th>
                       <th className="py-3.5 px-4">Payment</th>
                       <th className="py-3.5 px-4">Stage</th>
                       <th className="py-3.5 px-4 text-right">Actions</th>
@@ -1031,6 +980,9 @@ export default function App() {
                           <td className="py-4 px-4 text-slate-600 font-medium">
                             {formatContainerTag(order)}
                           </td>
+                          <td className="py-4 px-4 text-slate-600 font-bold">
+                            {order.target_completion_time || 'Same Day'}
+                          </td>
                           <td className="py-4 px-4">
                             <button
                               onClick={() =>
@@ -1063,7 +1015,7 @@ export default function App() {
                     })}
                     {activeOrders.length === 0 && (
                       <tr>
-                        <td colSpan="7" className="py-12 text-center text-slate-400 font-medium">
+                        <td colSpan="8" className="py-12 text-center text-slate-400 font-medium">
                           No current active orders for today.
                         </td>
                       </tr>
@@ -1075,7 +1027,6 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 2: WALK-IN INTAKE */}
         {activeTab === 'intake' && (
           <div className="p-8 max-w-3xl mx-auto w-full">
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8">
@@ -1215,7 +1166,6 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 3: PROGRESS MANAGER */}
         {activeTab === 'progress' && (
           <div className="p-8 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-4 mb-2 bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
@@ -1328,7 +1278,6 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 4: PICKUP VERIFICATION */}
         {activeTab === 'pickup' && (
           <div className="p-8 max-w-2xl mx-auto w-full space-y-6">
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-6">
@@ -1427,7 +1376,6 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 5: SALES ANALYTICS */}
         {activeTab === 'sales' && (
           <div className="p-8 space-y-6 max-w-5xl mx-auto w-full">
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-6">
@@ -1454,6 +1402,13 @@ export default function App() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              <div className="p-4 bg-blue-50/70 border border-blue-200 rounded-xl text-xs text-[#0f4b81] space-y-1">
+                <p className="font-bold uppercase tracking-wide">💡 Sales Analytics Logic Explanation:</p>
+                <p className="text-slate-700">
+                  Revenue is computed dynamically from live database orders using a standard ₱140 per 12kg batch rate, multiplied across the selected timeframe ({salesTimeframe}). Total volume combines baseline shop capacity (3,000 kg) with all customer weights currently in queue.
+                </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -1492,7 +1447,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Customer Reviews Feed */}
               <div className="pt-4 border-t border-slate-100">
                 <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3 flex items-center space-x-2">
                   <Star className="w-4 h-4 text-amber-500" />
@@ -1519,7 +1473,6 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 6: UTILITY ANALYTICS */}
         {activeTab === 'utility' && (
           <div className="p-8 max-w-4xl mx-auto w-full space-y-6">
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-6">
@@ -1588,7 +1541,6 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 7: SETTINGS & ANNOUNCEMENTS */}
         {activeTab === 'settings' && (
           <div className="p-8 max-w-3xl mx-auto w-full space-y-6">
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-4">
@@ -1651,7 +1603,6 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 8: EDITABLE ADMIN PROFILE & REGISTERED CUSTOMERS DIRECTORY */}
         {activeTab === 'profile' && (
           <div className="p-8 max-w-5xl mx-auto w-full space-y-6">
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8">
@@ -1711,7 +1662,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Editable Profile Form */}
               {isEditingProfile ? (
                 <form
                   onSubmit={(e) => {
@@ -1811,7 +1761,6 @@ export default function App() {
               )}
             </div>
 
-            {/* Registered Mobile App Customers Directory */}
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-4">
               <div className="flex justify-between items-center">
                 <div className="flex items-center space-x-3">
