@@ -49,9 +49,13 @@ export default function App() {
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState({ message: '', type: 'success' });
 
+  // Progress Manager Date Filter State
   const [progressDateFilter, setProgressDateFilter] = useState('');
+
+  // Sales Analytics Timeframe State
   const [salesTimeframe, setSalesTimeframe] = useState('monthly');
 
+  // Customer Intake Form State
   const [selectedUserId, setSelectedUserId] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
@@ -60,22 +64,27 @@ export default function App() {
   const [paymentStatus, setPaymentStatus] = useState('Unpaid');
   const [targetCompletionTime, setTargetCompletionTime] = useState('Same Day, 6:00 PM - 8:00 PM');
 
+  // Weigh-in Modal State
   const [weighOrder, setWeighOrder] = useState(null);
   const [weighInput, setWeighInput] = useState('8');
   const [weighDescription, setWeighDescription] = useState('Blue Laundry Bag');
 
+  // Pickup Verification State
   const [searchQuery, setSearchQuery] = useState('');
   const [verifiedOrder, setVerifiedOrder] = useState(null);
 
+  // Utility Calculator State
   const [waterCost, setWaterCost] = useState(5500);
   const [electricityCost, setElectricityCost] = useState(20000);
   const [suppliesCost, setSuppliesCost] = useState(15000);
   const [monthlyVolume, setMonthlyVolume] = useState(3000);
 
+  // Announcement & Settings State
   const [announcementTitle, setAnnouncementTitle] = useState('');
   const [announcementMessage, setAnnouncementMessage] = useState('');
   const [shopCapacityLimit, setShopCapacityLimit] = useState(8);
 
+  // Editable Admin Profile State
   const [adminProfile, setAdminProfile] = useState(() => {
     const saved = localStorage.getItem('ksc_admin_profile');
     if (saved) {
@@ -94,6 +103,7 @@ export default function App() {
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState(adminProfile);
 
+  // Customer Edit Modal State
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [customerForm, setCustomerForm] = useState({ full_name: '', phone_number: '', email: '' });
 
@@ -984,7 +994,7 @@ export default function App() {
                             {formatContainerTag(order)}
                           </td>
                           <td className="py-4 px-4 text-slate-600 font-bold">
-                            {order.target_completion_time || 'Same Day'}
+                            {order.target_completion_time || 'Same Day, 6:00 PM - 8:00 PM'}
                           </td>
                           <td className="py-4 px-4">
                             <button
@@ -1237,6 +1247,7 @@ export default function App() {
                           </div>
                           <p className="text-xs font-bold text-slate-900">{order.customer_name}</p>
                           <p className="text-[10px] text-slate-500 font-medium">{formatContainerTag(order)}</p>
+                          <p className="text-[10px] text-blue-700 font-bold">Est: {order.target_completion_time || 'Same Day'}</p>
 
                           {parseFloat(order.total_weight_kg || 0) <= 0 && (
                             <button
