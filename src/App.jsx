@@ -285,7 +285,7 @@ export default function App() {
       });
       
       if (res.ok) {
-        showToast(`Order #${weighOrder.order_id} weighed (${w} kg) & tagged successfully.`);
+        showToast(`No. of Order #${weighOrder.order_id} weighed (${w} kg) & tagged successfully.`);
         setWeighOrder(null);
         await fetchDashboard();
       } else {
@@ -756,7 +756,7 @@ export default function App() {
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-3xl p-7 max-w-md w-full shadow-2xl border border-slate-100 space-y-4">
               <h3 className="text-base font-black text-slate-900">
-                Weigh &amp; Tag Order #{weighOrder.order_id}
+                Weigh &amp; Tag No. of Order #{weighOrder.order_id}
               </h3>
               <p className="text-xs text-slate-500">
                 Customer: <span className="font-bold text-slate-800">{weighOrder.customer_name}</span>. Enter actual scale weight and container description.
@@ -951,7 +951,7 @@ export default function App() {
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200">
                     <tr>
-                      <th className="py-3.5 px-4">Order ID</th>
+                      <th className="py-3.5 px-4">No. of Order</th>
                       <th className="py-3.5 px-4">Customer</th>
                       <th className="py-3.5 px-4">Weight</th>
                       <th className="py-3.5 px-4">Container Description</th>
@@ -969,7 +969,7 @@ export default function App() {
                       return (
                         <tr key={order.order_id} className="hover:bg-slate-50/80 transition">
                           <td className="py-4 px-4 font-extrabold text-[#0f4b81]">
-                            Order #{order.order_id}
+                            No. of Order #{order.order_id}
                           </td>
                           <td className="py-4 px-4 font-bold text-slate-800">
                             {order.customer_name}
@@ -1156,10 +1156,13 @@ export default function App() {
                       onChange={(e) => setTargetCompletionTime(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#0f4b81]"
                     >
+                      <option>Same Day, 4:00 PM - 6:00 PM</option>
                       <option>Same Day, 6:00 PM - 8:00 PM</option>
-                      <option>Standard, 24 Hours</option>
-                      <option>Express, 3 Hours</option>
-                      <option>Next Day Morning, 9:00 AM</option>
+                      <option>Tomorrow, 8:00 AM - 10:00 AM</option>
+                      <option>Tomorrow, 1:00 PM - 3:00 PM</option>
+                      <option>Tomorrow, 5:00 PM - 6:00 PM</option>
+                      <option>In 2 Days, 10:00 AM - 12:00 PM</option>
+                      <option>In 2 Days, 4:00 PM - 6:00 PM</option>
                     </select>
                   </div>
                 </div>
@@ -1239,7 +1242,7 @@ export default function App() {
                         <div key={order.order_id} className="p-3.5 rounded-xl border border-slate-200/60 bg-white space-y-2 shadow-2xs hover:shadow-sm transition">
                           <div className="flex justify-between items-center">
                             <span className="font-extrabold text-xs text-[#0f4b81]">
-                              Order #{order.order_id}
+                              No. of Order #{order.order_id}
                             </span>
                             <span className="text-[11px] font-semibold text-slate-500">
                               {parseFloat(order.total_weight_kg || 0) > 0 ? `${order.total_weight_kg} kg` : 'Unweighed'}
