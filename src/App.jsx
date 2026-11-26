@@ -49,13 +49,9 @@ export default function App() {
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState({ message: '', type: 'success' });
 
-  // Progress Manager Date Filter State
   const [progressDateFilter, setProgressDateFilter] = useState('');
-
-  // Sales Analytics Timeframe State
   const [salesTimeframe, setSalesTimeframe] = useState('monthly');
 
-  // Customer Intake Form State
   const [selectedUserId, setSelectedUserId] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
@@ -64,27 +60,22 @@ export default function App() {
   const [paymentStatus, setPaymentStatus] = useState('Unpaid');
   const [targetCompletionTime, setTargetCompletionTime] = useState('Same Day, 6:00 PM - 8:00 PM');
 
-  // Weigh-in Modal State
   const [weighOrder, setWeighOrder] = useState(null);
   const [weighInput, setWeighInput] = useState('8');
   const [weighDescription, setWeighDescription] = useState('Blue Laundry Bag');
 
-  // Pickup Verification State
   const [searchQuery, setSearchQuery] = useState('');
   const [verifiedOrder, setVerifiedOrder] = useState(null);
 
-  // Utility Calculator State
   const [waterCost, setWaterCost] = useState(5500);
   const [electricityCost, setElectricityCost] = useState(20000);
   const [suppliesCost, setSuppliesCost] = useState(15000);
   const [monthlyVolume, setMonthlyVolume] = useState(3000);
 
-  // Announcement & Settings State
   const [announcementTitle, setAnnouncementTitle] = useState('');
   const [announcementMessage, setAnnouncementMessage] = useState('');
   const [shopCapacityLimit, setShopCapacityLimit] = useState(8);
 
-  // Editable Admin Profile State
   const [adminProfile, setAdminProfile] = useState(() => {
     const saved = localStorage.getItem('ksc_admin_profile');
     if (saved) {
@@ -103,7 +94,6 @@ export default function App() {
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState(adminProfile);
 
-  // Customer Edit Modal State
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [customerForm, setCustomerForm] = useState({ full_name: '', phone_number: '', email: '' });
 
@@ -562,7 +552,6 @@ export default function App() {
   const currentSalesDisplay = (estimatedLiveSales * salesMultiplier).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const currentVolumeDisplay = Math.round((3000 + totalProcessedKg) * salesMultiplier).toLocaleString();
 
-  // Dynamic Sales Analytics Distribution percentages based on timeframe and order types
   const standardWashPercent = salesTimeframe === 'daily' ? 82 : salesTimeframe === 'weekly' ? 75 : 78;
   const expressDropPercent = 100 - standardWashPercent;
 
@@ -589,12 +578,12 @@ export default function App() {
     const display = status === 'Received' ? 'Scheduled' : status;
     const lower = (display || '').toLowerCase();
     if (lower === 'picked up' || lower === 'completed') {
-      return 'bg-emerald-50 text-emerald-700 border border-emerald-200/60';
+      return 'bg-emerald-50 text-emerald-700 border border-emerald-200/60 whitespace-nowrap';
     }
     if (lower === 'ready for pick-up') {
-      return 'bg-amber-50 text-amber-800 border border-amber-200/60';
+      return 'bg-amber-50 text-amber-800 border border-amber-200/60 whitespace-nowrap';
     }
-    return 'bg-blue-50 text-[#0f4b81] border border-blue-200/60';
+    return 'bg-blue-50 text-[#0f4b81] border border-blue-200/60 whitespace-nowrap';
   };
 
   const getNextStageInfo = (status) => {
@@ -1390,7 +1379,6 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 5: SALES ANALYTICS */}
         {activeTab === 'sales' && (
           <div className="p-8 space-y-6 max-w-5xl mx-auto w-full">
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-6">
@@ -1439,7 +1427,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Dynamic Sales Analytics Distribution Trend */}
               <div className="p-6 bg-blue-50/40 rounded-2xl border border-blue-100 space-y-3">
                 <h4 className="text-xs font-extrabold text-[#0f4b81] uppercase tracking-wider">
                   {salesTimeframe.charAt(0).toUpperCase() + salesTimeframe.slice(1)} Revenue Distribution Trend
@@ -1466,7 +1453,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Customer Reviews Feed */}
               <div className="pt-4 border-t border-slate-100">
                 <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3 flex items-center space-x-2">
                   <Star className="w-4 h-4 text-amber-500" />
@@ -1493,7 +1479,6 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 6: UTILITY ANALYTICS */}
         {activeTab === 'utility' && (
           <div className="p-8 max-w-4xl mx-auto w-full space-y-6">
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-6">
@@ -1562,7 +1547,6 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 7: SETTINGS & ANNOUNCEMENTS */}
         {activeTab === 'settings' && (
           <div className="p-8 max-w-3xl mx-auto w-full space-y-6">
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-4">
@@ -1625,7 +1609,6 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 8: EDITABLE ADMIN PROFILE & REGISTERED CUSTOMERS DIRECTORY */}
         {activeTab === 'profile' && (
           <div className="p-8 max-w-5xl mx-auto w-full space-y-6">
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8">
@@ -1685,7 +1668,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Editable Profile Form */}
               {isEditingProfile ? (
                 <form
                   onSubmit={(e) => {
@@ -1785,7 +1767,6 @@ export default function App() {
               )}
             </div>
 
-            {/* Registered Mobile App Customers Directory */}
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-4">
               <div className="flex justify-between items-center">
                 <div className="flex items-center space-x-3">
