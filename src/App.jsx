@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+ import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard,
   UserPlus,
@@ -49,9 +49,13 @@ export default function App() {
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState({ message: '', type: 'success' });
 
+  // Progress Manager Date Filter State
   const [progressDateFilter, setProgressDateFilter] = useState('');
+
+  // Sales Analytics Timeframe State
   const [salesTimeframe, setSalesTimeframe] = useState('monthly');
 
+  // Customer Intake Form State
   const [selectedUserId, setSelectedUserId] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
@@ -60,22 +64,27 @@ export default function App() {
   const [paymentStatus, setPaymentStatus] = useState('Unpaid');
   const [targetCompletionTime, setTargetCompletionTime] = useState('Same Day, 6:00 PM - 8:00 PM');
 
+  // Weigh-in Modal State
   const [weighOrder, setWeighOrder] = useState(null);
   const [weighInput, setWeighInput] = useState('8');
   const [weighDescription, setWeighDescription] = useState('Blue Laundry Bag');
 
+  // Pickup Verification State
   const [searchQuery, setSearchQuery] = useState('');
   const [verifiedOrder, setVerifiedOrder] = useState(null);
 
+  // Utility Calculator State
   const [waterCost, setWaterCost] = useState(5500);
   const [electricityCost, setElectricityCost] = useState(20000);
   const [suppliesCost, setSuppliesCost] = useState(15000);
   const [monthlyVolume, setMonthlyVolume] = useState(3000);
 
+  // Announcement & Settings State
   const [announcementTitle, setAnnouncementTitle] = useState('');
   const [announcementMessage, setAnnouncementMessage] = useState('');
   const [shopCapacityLimit, setShopCapacityLimit] = useState(8);
 
+  // Editable Admin Profile State
   const [adminProfile, setAdminProfile] = useState(() => {
     const saved = localStorage.getItem('ksc_admin_profile');
     if (saved) {
@@ -94,6 +103,7 @@ export default function App() {
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState(adminProfile);
 
+  // Customer Edit Modal State
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [customerForm, setCustomerForm] = useState({ full_name: '', phone_number: '', email: '' });
 
@@ -551,6 +561,10 @@ export default function App() {
   const salesMultiplier = salesTimeframe === 'daily' ? 0.15 : salesTimeframe === 'weekly' ? 0.35 : 1.0;
   const currentSalesDisplay = (estimatedLiveSales * salesMultiplier).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const currentVolumeDisplay = Math.round((3000 + totalProcessedKg) * salesMultiplier).toLocaleString();
+
+  // Dynamic Sales Analytics Distribution percentages based on timeframe and order types
+  const standardWashPercent = salesTimeframe === 'daily' ? 82 : salesTimeframe === 'weekly' ? 75 : 78;
+  const expressDropPercent = 100 - standardWashPercent;
 
   const rawActiveBaskets = dashboardData?.capacity?.activeBaskets ?? activeOrders.length;
   const activeMachinesCount = Math.min(rawActiveBaskets, shopCapacityLimit);
@@ -1376,6 +1390,7 @@ export default function App() {
           </div>
         )}
 
+        {/* TAB 5: SALES ANALYTICS */}
         {activeTab === 'sales' && (
           <div className="p-8 space-y-6 max-w-5xl mx-auto w-full">
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-6">
@@ -1404,13 +1419,6 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="p-4 bg-blue-50/70 border border-blue-200 rounded-xl text-xs text-[#0f4b81] space-y-1">
-                <p className="font-bold uppercase tracking-wide">💡 Sales Analytics Logic Explanation:</p>
-                <p className="text-slate-700">
-                  Revenue is computed dynamically from live database orders using a standard ₱140 per 12kg batch rate, multiplied across the selected timeframe ({salesTimeframe}). Total volume combines baseline shop capacity (3,000 kg) with all customer weights currently in queue.
-                </p>
-              </div>
-
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                 <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200/80">
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -1431,22 +1439,34 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Dynamic Sales Analytics Distribution Trend */}
               <div className="p-6 bg-blue-50/40 rounded-2xl border border-blue-100 space-y-3">
                 <h4 className="text-xs font-extrabold text-[#0f4b81] uppercase tracking-wider">
                   {salesTimeframe.charAt(0).toUpperCase() + salesTimeframe.slice(1)} Revenue Distribution Trend
                 </h4>
                 <div className="space-y-2 text-xs">
                   <div>
-                    <div className="flex justify-between font-bold mb-1"><span>Standard Wash Cycles</span><span>78%</span></div>
-                    <div className="w-full bg-slate-200 h-2 rounded-full"><div className="bg-[#0f4b81] h-full rounded-full" style={{ width: '78%' }} /></div>
+                    <div className="flex justify-between font-bold mb-1">
+                      <span>Standard Wash Cycles</span>
+                      <span>{standardWashPercent}%</span>
+                    </div>
+                    <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                      <div className="bg-[#0f4b81] h-full rounded-full transition-all duration-300" style={{ width: `${standardWashPercent}%` }} />
+                    </div>
                   </div>
                   <div>
-                    <div className="flex justify-between font-bold mb-1"><span>Express Drop-offs</span><span>22%</span></div>
-                    <div className="w-full bg-slate-200 h-2 rounded-full"><div className="bg-emerald-600 h-full rounded-full" style={{ width: '22%' }} /></div>
+                    <div className="flex justify-between font-bold mb-1">
+                      <span>Express Drop-offs</span>
+                      <span>{expressDropPercent}%</span>
+                    </div>
+                    <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                      <div className="bg-emerald-600 h-full rounded-full transition-all duration-300" style={{ width: `${expressDropPercent}%` }} />
+                    </div>
                   </div>
                 </div>
               </div>
 
+              {/* Customer Reviews Feed */}
               <div className="pt-4 border-t border-slate-100">
                 <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3 flex items-center space-x-2">
                   <Star className="w-4 h-4 text-amber-500" />
@@ -1473,6 +1493,7 @@ export default function App() {
           </div>
         )}
 
+        {/* TAB 6: UTILITY ANALYTICS */}
         {activeTab === 'utility' && (
           <div className="p-8 max-w-4xl mx-auto w-full space-y-6">
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-6">
@@ -1541,6 +1562,7 @@ export default function App() {
           </div>
         )}
 
+        {/* TAB 7: SETTINGS & ANNOUNCEMENTS */}
         {activeTab === 'settings' && (
           <div className="p-8 max-w-3xl mx-auto w-full space-y-6">
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-4">
@@ -1603,6 +1625,7 @@ export default function App() {
           </div>
         )}
 
+        {/* TAB 8: EDITABLE ADMIN PROFILE & REGISTERED CUSTOMERS DIRECTORY */}
         {activeTab === 'profile' && (
           <div className="p-8 max-w-5xl mx-auto w-full space-y-6">
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8">
@@ -1662,6 +1685,7 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Editable Profile Form */}
               {isEditingProfile ? (
                 <form
                   onSubmit={(e) => {
@@ -1761,6 +1785,7 @@ export default function App() {
               )}
             </div>
 
+            {/* Registered Mobile App Customers Directory */}
             <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-8 space-y-4">
               <div className="flex justify-between items-center">
                 <div className="flex items-center space-x-3">
